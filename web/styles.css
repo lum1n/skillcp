@@ -65,15 +65,17 @@ textarea { resize: vertical; line-height: 1.45; }
 label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
 .hint { color: #7f766c; font-weight: 400; }
 
-.banner {
-  background: #2a2218;
-  border: 1px solid #5b4630;
-  color: #efd3aa;
+.activity {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
   padding: 10px 12px;
-  border-radius: 10px;
-  font-size: 13px;
   margin: 0 0 16px;
+  font-size: 13px;
 }
+.activity h2 { margin: 0 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.activity ul { margin: 0; padding-left: 18px; }
+.activity li { margin: 2px 0; }
 .tabs { display: flex; gap: 6px; margin: 8px 0 18px; }
 .tab {
   background: transparent;

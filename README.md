@@ -75,7 +75,28 @@ skillcp sync --to cursor --to claude
 - the `skillcp` Agent Skill (so the model knows when to use it)
 - the `skillcp` MCP server (`skillcp serve` over stdio)
 
-Any MCP-capable harness can then call tools like `skillcp_add_skill`, `skillcp_add_mcp`, `skillcp_import`, and `skillcp_sync` instead of editing five config files by hand.
+Any MCP-capable harness can then call tools like `skillcp_add_skill`, `skillcp_add_mcp`, `skillcp_import`, `skillcp_sync`, and `skillcp_open_ui` instead of editing five config files by hand.
+
+This repo is also a native plugin for the IDEs:
+
+**Cursor / VS Code / Copilot / Windsurf**
+
+```bash
+code --install-extension ./extensions/vscode
+# or, in Cursor: Install from VSIX / install the folder as an extension
+```
+
+The extension registers the Skillcp MCP server, contributes the skill, and adds commands: Open UI, Sync, Import, Status.
+
+**Claude Code**
+
+This repository is a Claude Code plugin (`/.claude-plugin/plugin.json`). Enable it with:
+
+```bash
+claude plugin install .
+# or
+claude --plugin-dir .
+```
 
 If the MCP server is not connected, agents can still run the CLI. For a browser GUI, run `skillcp ui`. The bundled skill at `skills/skillcp/SKILL.md` documents both paths.
 

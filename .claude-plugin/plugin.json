@@ -1,0 +1,11 @@
+{
+  "name": "skillcp",
+  "description": "One library for Agent Skills and MCP servers, synced to every AI coding harness, plus a localhost GUI.",
+  "version": "0.1.0",
+  "author": {
+    "name": "lum1n"
+  },
+  "homepage": "https://github.com/lum1n/skillcp",
+  "repository": "https://github.com/lum1n/skillcp",
+  "keywords": ["skills", "mcp", "cursor", "claude-code"]
+}

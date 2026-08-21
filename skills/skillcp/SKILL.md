@@ -9,7 +9,7 @@ Skillcp is the cross-harness library for Agent Skills and MCP servers. One copy 
 
 ## Prefer MCP tools when connected
 
-If the `skillcp` MCP server is available, use those tools (`skillcp_status`, `skillcp_import`, `skillcp_sync`, `skillcp_add_skill`, `skillcp_add_mcp`, and the rest). Do not shell out unless the MCP server is missing.
+If the `skillcp` MCP server is available, use those tools (`skillcp_status`, `skillcp_import`, `skillcp_sync`, `skillcp_add_skill`, `skillcp_add_mcp`, `skillcp_open_ui`, and the rest). Do not shell out unless the MCP server is missing.
 
 ## CLI fallback
 
@@ -33,7 +33,7 @@ npx skillcp ui
 - "I already have MCP servers in Cursor" → `import` then `sync`
 - "Give every harness my whole library" → `sync --all` if some products are not detected
 - "Install Skillcp as a plugin" → `install` (adds this skill plus the Skillcp MCP server, then syncs)
-- "Give me a GUI" → `ui` (local web server at http://127.0.0.1:8787)
+- "Give me a GUI" → `ui` or the `skillcp_open_ui` MCP tool (local web server at http://127.0.0.1:8787)
 
 ## Rules
 

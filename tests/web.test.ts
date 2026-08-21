@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { initLibrary, libraryRoot } from "../src/library.js";
 import { writeLibrarySkill, listLibrarySkills, readSkillMarkdown } from "../src/skills.js";
 import { loadLibraryMcp } from "../src/sync.js";
-import { startWebUi, type WebUi } from "../src/web.js";
+import { startWebUi, ensureWebUi, type WebUi } from "../src/web.js";
 
 function tempHome(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "skillcp-web-"));
@@ -137,5 +137,14 @@ describe("web UI server", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/Invalid skill name/);
+  });
+
+  it("reuses one UI process via ensureWebUi", async () => {
+    const first = await ensureWebUi({ host: "127.0.0.1", port: 0, open: false });
+    const second = await ensureWebUi({ open: false });
+    expect(second.url).toBe(first.url);
+    const health = await fetch(new URL("/api/health", first.url));
+    expect(health.status).toBe(200);
+    await first.close();
   });
 });
