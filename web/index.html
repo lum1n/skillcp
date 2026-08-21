@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Skillcp</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="top">
+        <div>
+          <p class="brand">Skillcp</p>
+          <p class="library" id="library-path">Loading…</p>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div class="top-actions">
+          <button type="button" id="btn-import">Import</button>
+          <button type="button" class="primary" id="btn-sync">Sync</button>
+        </div>
+      </header>
+
+      <p class="banner hidden" id="doctor"></p>
+
+      <nav class="tabs" role="tablist">
+        <button type="button" class="tab active" data-tab="skills">Skills</button>
+        <button type="button" class="tab" data-tab="mcp">MCP servers</button>
+        <button type="button" class="tab" data-tab="harnesses">Harnesses</button>
+      </nav>
+
+      <main>
+        <section id="panel-skills" class="panel">
+          <div class="split">
+            <div>
+              <div class="panel-head">
+                <h1>Skills</h1>
+                <button type="button" id="btn-new-skill">New skill</button>
+              </div>
+              <form class="add-row" id="form-add-skill">
+                <input name="source" placeholder="Path, git URL, or owner/repo" />
+                <input name="path" placeholder="subdir (optional)" />
+                <button type="submit">Add</button>
+              </form>
+              <ul class="list" id="skill-list"></ul>
+            </div>
+            <div class="detail" id="skill-detail">
+              <p class="empty">Select a skill to view or edit it.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="panel-mcp" class="panel hidden">
+          <div class="split">
+            <div>
+              <div class="panel-head">
+                <h1>MCP servers</h1>
+              </div>
+              <ul class="list" id="mcp-list"></ul>
+            </div>
+            <form class="detail form-stack" id="form-mcp">
+              <h2 id="mcp-form-title">Add server</h2>
+              <label>Name<input name="name" required placeholder="github" /></label>
+              <label>Transport
+                <select name="type">
+                  <option value="stdio">stdio</option>
+                  <option value="http">http</option>
+                  <option value="sse">sse</option>
+                </select>
+              </label>
+              <label>Command<input name="command" placeholder="npx" /></label>
+              <label>Args<input name="args" placeholder="-y, @scope/server" /></label>
+              <label>URL<input name="url" placeholder="https://example.com/mcp" /></label>
+              <label>Env <span class="hint">KEY=value, one per line</span>
+                <textarea name="env" rows="3" placeholder="GITHUB_TOKEN=$GITHUB_TOKEN"></textarea>
+              </label>
+              <label>Headers <span class="hint">KEY=value, one per line</span>
+                <textarea name="headers" rows="2"></textarea>
+              </label>
+              <label>cwd<input name="cwd" /></label>
+              <div class="row-actions">
+                <button type="submit" class="primary">Save server</button>
+                <button type="button" class="ghost" id="btn-mcp-reset">Clear</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section id="panel-harnesses" class="panel hidden">
+          <div class="panel-head">
+            <h1>Harnesses</h1>
+            <label class="check"><input type="checkbox" id="sync-project" /> Also write project files</label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Harness</th>
+                  <th>Status</th>
+                  <th>Skills</th>
+                  <th>MCP</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="harness-rows"></tbody>
+            </table>
+          </div>
+          <div class="row-actions">
+            <button type="button" id="btn-install">Install Skillcp plugin</button>
+            <button type="button" id="btn-sync-all">Sync all detected</button>
+          </div>
+        </section>
+      </main>
+    </div>
+    <div class="toast hidden" id="toast"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

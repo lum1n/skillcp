@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
-import { copyDir, exists, isDir, listDirs, readText } from "./fsx.js";
-import { skillsRoot } from "./library.js";
+import { copyDir, ensureDir, exists, isDir, listDirs, readText, writeText } from "./fsx.js";
+import { loadManifest, saveManifest, skillsRoot } from "./library.js";
 import type { SkillRecord } from "./types.js";
 
 const NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -78,5 +78,36 @@ export function removeLibrarySkill(name: string): boolean {
   const dest = librarySkillDir(name);
   if (!exists(dest)) return false;
   fs.rmSync(dest, { recursive: true, force: true });
+  const manifest = loadManifest();
+  delete manifest.skills[name];
+  saveManifest(manifest);
   return true;
+}
+
+export function readSkillMarkdown(name: string): string | undefined {
+  return readText(path.join(librarySkillDir(name), "SKILL.md"));
+}
+
+export function skillBody(markdown: string): string {
+  return matter(markdown).content.replace(/^\s+/, "").replace(/\s+$/, "");
+}
+
+export function writeLibrarySkill(name: string, description: string, body: string): SkillRecord {
+  const errors = validateSkillName(name);
+  if (errors.length) {
+    throw new Error(`Invalid skill name "${name}": ${errors.join("; ")}`);
+  }
+  const desc = description.trim();
+  if (!desc) throw new Error("description is required");
+  if (desc.length > 1024) throw new Error("description must be at most 1024 characters");
+  const dest = librarySkillDir(name);
+  ensureDir(dest);
+  const markdown = `---\nname: ${name}\ndescription: ${JSON.stringify(desc)}\n---\n\n${body.trim()}\n`;
+  writeText(path.join(dest, "SKILL.md"), markdown);
+  const record = parseSkill(dest);
+  if (!record) throw new Error(`Failed to write skill "${name}"`);
+  const manifest = loadManifest();
+  manifest.skills[name] = manifest.skills[name] ?? { origin: "web" };
+  saveManifest(manifest);
+  return record;
 }

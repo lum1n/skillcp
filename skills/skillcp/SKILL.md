@@ -22,6 +22,7 @@ npx skillcp mcp add <name> --url https://example/mcp --type http
 npx skillcp sync
 npx skillcp sync --project
 npx skillcp install
+npx skillcp ui
 ```
 
 `sync` defaults to user-global files for whatever harnesses look installed. Add `--project` to also write repo-local files (`.cursor/skills`, `.mcp.json`, `.vscode/mcp.json`, …).
@@ -32,6 +33,7 @@ npx skillcp install
 - "I already have MCP servers in Cursor" → `import` then `sync`
 - "Give every harness my whole library" → `sync --all` if some products are not detected
 - "Install Skillcp as a plugin" → `install` (adds this skill plus the Skillcp MCP server, then syncs)
+- "Give me a GUI" → `ui` (local web server at http://127.0.0.1:8787)
 
 ## Rules
 
