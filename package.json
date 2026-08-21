@@ -1,0 +1,59 @@
+{
+  "name": "skillcp",
+  "version": "0.1.0",
+  "description": "Organize Agent Skills and MCP servers once, then sync them to every major AI coding harness.",
+  "type": "module",
+  "bin": {
+    "skillcp": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepare": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx src/cli.ts",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "mcp",
+    "skills",
+    "agent-skills",
+    "cursor",
+    "claude-code",
+    "copilot",
+    "codex",
+    "gemini",
+    "windsurf",
+    "opencode"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lum1n/skillcp.git"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "commander": "^14.0.0",
+    "gray-matter": "^4.0.3",
+    "jsonc-parser": "^3.3.1",
+    "smol-toml": "^1.4.2",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

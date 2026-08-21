@@ -1,0 +1,287 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  toCodexEntry,
+  toGeminiEntry,
+  toMcpServersEntry,
+  toOpenCodeEntry,
+  toVscodeEntry,
+  normalizeServer,
+  normalizeMap,
+} from "../src/mcp-format.js";
+import { parseSkill, validateSkillName, findSkills } from "../src/skills.js";
+import { initLibrary, libraryRoot } from "../src/library.js";
+import { addMcp, addSkillSource, installSelfMcp, installSelfSkill } from "../src/install.js";
+import { importFromHarnesses } from "../src/import.js";
+import { loadLibraryMcp, syncAll } from "../src/sync.js";
+import { writeJson, readJsonc, readLink, readToml } from "../src/fsx.js";
+import { HARNESSES, harnessById } from "../src/harnesses.js";
+import { writeServerMap, readServerMap } from "../src/mcp-io.js";
+import { spawnSync } from "node:child_process";
+
+function tempHome(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), "skillcp-home-"));
+}
+
+let home: string;
+let project: string;
+
+beforeEach(() => {
+  home = tempHome();
+  project = path.join(home, "proj");
+  fs.mkdirSync(project, { recursive: true });
+  process.env.SKILLCP_HOME = home;
+  process.env.SKILLCP_DIR = path.join(home, ".skillcp");
+  process.env.SKILLCP_PROJECT = project;
+  process.env.XDG_CONFIG_HOME = path.join(home, ".config");
+  initLibrary();
+});
+
+afterEach(() => {
+  fs.rmSync(home, { recursive: true, force: true });
+  delete process.env.SKILLCP_HOME;
+  delete process.env.SKILLCP_DIR;
+  delete process.env.SKILLCP_PROJECT;
+  delete process.env.XDG_CONFIG_HOME;
+});
+
+describe("mcp format conversion", () => {
+  const stdio = {
+    type: "stdio" as const,
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-github"],
+    env: { GITHUB_TOKEN: "$GITHUB_TOKEN" },
+  };
+  const http = {
+    type: "http" as const,
+    url: "https://example.com/mcp",
+    headers: { Authorization: "Bearer x" },
+  };
+
+  it("round-trips stdio servers across harness formats", () => {
+    expect(toMcpServersEntry(stdio)).toEqual({
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-github"],
+      env: { GITHUB_TOKEN: "$GITHUB_TOKEN" },
+    });
+    expect(toVscodeEntry(stdio)).toMatchObject({ type: "stdio", command: "npx" });
+    expect(toOpenCodeEntry(stdio)).toEqual({
+      type: "local",
+      command: ["npx", "-y", "@modelcontextprotocol/server-github"],
+      environment: { GITHUB_TOKEN: "$GITHUB_TOKEN" },
+      enabled: true,
+    });
+    expect(toGeminiEntry(stdio).command).toBe("npx");
+    expect(toCodexEntry(stdio).command).toBe("npx");
+    expect(normalizeServer(toOpenCodeEntry(stdio))).toMatchObject({
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-github"],
+    });
+  });
+
+  it("maps HTTP vs SSE for Gemini and VS Code", () => {
+    expect(toGeminiEntry(http)).toEqual({
+      httpUrl: "https://example.com/mcp",
+      headers: { Authorization: "Bearer x" },
+    });
+    expect(toGeminiEntry({ type: "sse", url: "https://example.com/sse" })).toEqual({
+      url: "https://example.com/sse",
+    });
+    expect(toVscodeEntry(http)).toMatchObject({ type: "http", url: http.url });
+    expect(normalizeServer({ httpUrl: "https://example.com/mcp" })?.type).toBe("http");
+  });
+
+  it("ignores underscore keys when normalizing maps", () => {
+    expect(normalizeMap({ _comment: "nope", github: stdio })).toHaveProperty("github");
+    expect(normalizeMap({ _comment: "nope", github: stdio })).not.toHaveProperty("_comment");
+  });
+});
+
+describe("skills", () => {
+  it("parses SKILL.md frontmatter and validates names", () => {
+    const dir = path.join(home, "pdf-processing");
+    fs.mkdirSync(dir);
+    fs.writeFileSync(
+      path.join(dir, "SKILL.md"),
+      `---\nname: pdf-processing\ndescription: Extract text from PDFs.\n---\n\nDo the work.\n`,
+    );
+    const skill = parseSkill(dir);
+    expect(skill?.name).toBe("pdf-processing");
+    expect(skill?.description).toContain("PDFs");
+    expect(validateSkillName("pdf-processing")).toEqual([]);
+    expect(validateSkillName("PDF")).not.toEqual([]);
+    expect(validateSkillName("-bad")).not.toEqual([]);
+  });
+
+  it("finds nested skills", () => {
+    const root = path.join(home, "tree");
+    const nested = path.join(root, "shipping", "deploy-staging");
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(
+      path.join(nested, "SKILL.md"),
+      `---\nname: deploy-staging\ndescription: Deploy staging.\n---\n`,
+    );
+    expect(findSkills(root).map((s) => s.name)).toEqual(["deploy-staging"]);
+  });
+});
+
+describe("library sync", () => {
+  it("imports from Cursor and syncs to Claude Code", () => {
+    const cursorSkills = path.join(home, ".cursor", "skills", "code-review");
+    fs.mkdirSync(cursorSkills, { recursive: true });
+    fs.writeFileSync(
+      path.join(cursorSkills, "SKILL.md"),
+      `---\nname: code-review\ndescription: Review diffs.\n---\nLook at the diff.\n`,
+    );
+    writeJson(path.join(home, ".cursor", "mcp.json"), {
+      mcpServers: {
+        github: {
+          command: "npx",
+          args: ["-y", "@modelcontextprotocol/server-github"],
+        },
+      },
+    });
+
+    const imported = importFromHarnesses({ to: ["cursor"] });
+    expect(imported.skills.some((s) => s.name === "code-review" && s.action === "added")).toBe(true);
+    expect(imported.mcp.some((s) => s.name === "github" && s.action === "added")).toBe(true);
+    expect(loadLibraryMcp().github?.command).toBe("npx");
+
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    const targets = syncAll({ to: ["claude"], force: true });
+    expect(targets.some((t) => t.kind === "skills" && t.action === "link")).toBe(true);
+    expect(targets.some((t) => t.kind === "mcp" && t.action === "write")).toBe(true);
+
+    const linked = readLink(path.join(home, ".claude", "skills", "code-review"));
+    expect(linked && linked.endsWith(path.join(".skillcp", "skills", "code-review"))).toBe(true);
+
+    const claudeJson = readJsonc(path.join(home, ".claude.json"));
+    expect(claudeJson).toMatchObject({
+      mcpServers: {
+        github: {
+          command: "npx",
+          args: ["-y", "@modelcontextprotocol/server-github"],
+        },
+      },
+    });
+  });
+
+  it("writes OpenCode, Codex, Gemini, and VS Code shapes", () => {
+    addMcp("docs", { type: "http", url: "https://example.com/mcp" });
+    addMcp("github", {
+      command: "npx",
+      args: ["-y", "github"],
+      env: { TOKEN: "x" },
+    });
+
+    fs.mkdirSync(path.join(home, ".config", "opencode"), { recursive: true });
+    fs.mkdirSync(path.join(home, ".codex"), { recursive: true });
+    fs.mkdirSync(path.join(home, ".gemini"), { recursive: true });
+    fs.mkdirSync(path.join(home, ".copilot"), { recursive: true });
+
+    syncAll({ to: ["opencode", "codex", "gemini", "copilot"] });
+
+    const opencode = readJsonc(path.join(home, ".config", "opencode", "opencode.json"));
+    expect(opencode?.mcp).toMatchObject({
+      github: { type: "local", command: ["npx", "-y", "github"] },
+      docs: { type: "remote", url: "https://example.com/mcp" },
+    });
+
+    const codex = readToml(path.join(home, ".codex", "config.toml"));
+    expect(codex?.mcp_servers).toMatchObject({
+      github: { command: "npx" },
+      docs: { url: "https://example.com/mcp" },
+    });
+
+    const gemini = readJsonc(path.join(home, ".gemini", "settings.json"));
+    expect(gemini?.mcpServers).toMatchObject({
+      github: { command: "npx" },
+      docs: { httpUrl: "https://example.com/mcp" },
+    });
+
+    const vscode = readJsonc(path.join(home, ".copilot", "mcp-config.json"));
+    expect(vscode?.mcpServers?.github?.command).toBe("npx");
+  });
+
+  it("preserves unrelated keys when merging MCP configs", () => {
+    writeJson(path.join(home, ".cursor", "mcp.json"), {
+      mcpServers: { keepme: { command: "echo" } },
+      extra: true,
+    });
+    addMcp("github", { command: "npx" });
+    syncAll({ to: ["cursor"] });
+    const doc = readJsonc(path.join(home, ".cursor", "mcp.json"));
+    expect(doc?.extra).toBe(true);
+    expect(doc?.mcpServers).toMatchObject({
+      keepme: { command: "echo" },
+      github: { command: "npx" },
+    });
+  });
+
+  it("registers the bundled skillcp skill and MCP server", () => {
+    installSelfSkill();
+    installSelfMcp();
+    expect(fs.existsSync(path.join(libraryRoot(), "skills", "skillcp", "SKILL.md"))).toBe(true);
+    expect(loadLibraryMcp().skillcp?.args?.slice(-1)[0]).toBe("serve");
+  });
+
+  it("skips importing a skill that already points at the library", () => {
+    const dir = path.join(project, "demo-skill");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "SKILL.md"),
+      `---\nname: demo-skill\ndescription: Demo.\n---\n`,
+    );
+    addSkillSource(dir);
+    fs.mkdirSync(path.join(home, ".cursor"), { recursive: true });
+    syncAll({ to: ["cursor"] });
+    const again = importFromHarnesses({ to: ["cursor"] });
+    expect(again.skills.find((s) => s.name === "demo-skill")?.action).toBe("skipped");
+  });
+});
+
+describe("cli", () => {
+  it("prints status", () => {
+    const result = spawnSync("npx", ["tsx", "src/cli.ts", "status"], {
+      cwd: path.join(import.meta.dirname, ".."),
+      encoding: "utf8",
+      env: { ...process.env },
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Library:");
+    expect(result.stdout).toContain("cursor");
+  });
+});
+
+describe("mcp file io", () => {
+  it("round-trips vscode servers and opencode v2 nested servers", () => {
+    const vscodeFile = path.join(home, "mcp.json");
+    writeServerMap(vscodeFile, "vscode-servers", {
+      github: { command: "npx", args: ["-y", "gh"] },
+    });
+    expect(readServerMap(vscodeFile, "vscode-servers").github?.command).toBe("npx");
+
+    const openFile = path.join(home, "opencode.json");
+    writeJson(openFile, { mcp: { servers: {} }, theme: "dark" });
+    writeServerMap(openFile, "opencode", {
+      github: { command: "uvx", args: ["mcp-git"] },
+    });
+    const doc = readJsonc(openFile);
+    expect(doc?.theme).toBe("dark");
+    expect((doc?.mcp as { servers: unknown }).servers).toMatchObject({
+      github: { type: "local", command: ["uvx", "mcp-git"] },
+    });
+  });
+});
+
+describe("harness registry", () => {
+  it("exposes the major coding harnesses", () => {
+    const ids = HARNESSES.map((h) => h.id);
+    expect(ids).toEqual(
+      expect.arrayContaining(["cursor", "claude", "copilot", "windsurf", "codex", "gemini", "opencode"]),
+    );
+    expect(harnessById("Claude Code")?.id).toBe("claude");
+  });
+});
