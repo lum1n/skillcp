@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "skillcp": {
+      "command": "node",
+      "args": ["./bin/serve.mjs"]
+    }
+  }
+}

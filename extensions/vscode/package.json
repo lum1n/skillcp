@@ -1,0 +1,48 @@
+{
+  "name": "skillcp",
+  "displayName": "Skillcp",
+  "description": "Organize Agent Skills and MCP servers once, then sync them to Cursor, Copilot, Claude Code, and other harnesses. Includes a localhost GUI.",
+  "version": "0.1.0",
+  "publisher": "lum1n",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "skillcp.openUi",
+        "title": "Skillcp: Open UI"
+      },
+      {
+        "command": "skillcp.sync",
+        "title": "Skillcp: Sync to harnesses"
+      },
+      {
+        "command": "skillcp.import",
+        "title": "Skillcp: Import from harnesses"
+      },
+      {
+        "command": "skillcp.status",
+        "title": "Skillcp: Status"
+      }
+    ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "skillcp",
+        "label": "Skillcp"
+      }
+    ],
+    "chatSkills": [
+      {
+        "id": "skillcp",
+        "name": "skillcp",
+        "path": "./skills/skillcp"
+      }
+    ]
+  }
+}

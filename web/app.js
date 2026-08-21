@@ -32,6 +32,29 @@ function project() {
   return document.getElementById("sync-project").checked;
 }
 
+function syncAllHarnesses() {
+  return document.getElementById("sync-all").checked;
+}
+
+function overwriteImport() {
+  return document.getElementById("import-overwrite").checked;
+}
+
+function showActivity(title, lines) {
+  const el = document.getElementById("activity");
+  el.classList.remove("hidden");
+  el.replaceChildren();
+  const heading = document.createElement("h2");
+  heading.textContent = title;
+  const list = document.createElement("ul");
+  for (const line of lines) {
+    const item = document.createElement("li");
+    item.textContent = line;
+    list.append(item);
+  }
+  el.append(heading, list);
+}
+
 function mcpSummary(server) {
   if (!server) return "";
   if (server.command) return [server.command, ...(server.args || [])].join(" ");
@@ -375,9 +398,16 @@ async function runImport(harnesses) {
   try {
     const data = await api("/api/import", {
       method: "POST",
-      body: { project: project(), harnesses },
+      body: { project: project(), overwrite: overwriteImport(), all: syncAllHarnesses(), harnesses },
     });
     setState(data.state);
+    const skills = (data.result?.skills || []).filter((row) => row.action !== "skipped");
+    const mcp = (data.result?.mcp || []).filter((row) => row.action !== "skipped");
+    const lines = [
+      ...skills.map((row) => `skill ${row.action}: ${row.name}`),
+      ...mcp.map((row) => `mcp ${row.action}: ${row.name}`),
+    ];
+    showActivity("Import", lines.length ? lines : ["Nothing new imported (existing entries were skipped)."]);
     toast("Import finished");
   } catch (error) {
     toast(error.message);
@@ -388,9 +418,15 @@ async function runSync(harnesses) {
   try {
     const data = await api("/api/sync", {
       method: "POST",
-      body: { project: project(), harnesses, force: true },
+      body: { project: project(), force: true, all: syncAllHarnesses(), harnesses },
     });
     setState(data.state);
+    const counts = {};
+    for (const target of data.targets || []) {
+      counts[target.action] = (counts[target.action] || 0) + 1;
+    }
+    const lines = Object.entries(counts).map(([action, count]) => `${count} ${action}`);
+    showActivity("Sync", lines.length ? lines : ["Nothing to sync."]);
     toast("Sync finished");
   } catch (error) {
     toast(error.message);

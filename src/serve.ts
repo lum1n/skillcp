@@ -154,6 +154,36 @@ export async function startMcpServer(): Promise<void> {
     },
   );
 
+  server.tool(
+    "skillcp_write_skill",
+    "Create or overwrite a skill in the library from name, description, and markdown body",
+    {
+      name: z.string(),
+      description: z.string(),
+      body: z.string().optional(),
+    },
+    async ({ name, description, body }) => {
+      ensure();
+      const { writeLibrarySkill } = await import("./skills.js");
+      return text(writeLibrarySkill(name, description, body ?? ""));
+    },
+  );
+
+  server.tool(
+    "skillcp_open_ui",
+    "Start the Skillcp localhost web UI if needed and return its URL",
+    {
+      port: z.number().optional(),
+      open: z.boolean().optional(),
+    },
+    async ({ port, open }) => {
+      ensure();
+      const { ensureWebUi } = await import("./web.js");
+      const ui = await ensureWebUi({ port, open: open ?? true });
+      return text({ url: ui.url, host: ui.host, port: ui.port });
+    },
+  );
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
