@@ -4,11 +4,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { HARNESSES } from "./harnesses.js";
 import { importFromHarnesses } from "./import.js";
-import { addMcp, addSkillSource, installSelfMcp, installSelfSkill, removeMcp } from "./install.js";
+import { addMcp, addSkillSource, installSelfMcp, installSelfSkill, removeMcp, uninstallSkill } from "./install.js";
 import { initLibrary, isInitialized, libraryRoot } from "./library.js";
 import { parseServerInput } from "./mcp-io.js";
 import { doctor, statusReport } from "./status.js";
-import { listLibrarySkills, parseSkill, removeLibrarySkill, librarySkillDir } from "./skills.js";
+import { listLibrarySkills, parseSkill, librarySkillDir } from "./skills.js";
 import { loadLibraryMcp, syncAll } from "./sync.js";
 import type { McpServerConfig } from "./types.js";
 
@@ -244,15 +244,24 @@ skill
 skill
   .command("rm")
   .argument("<name>", "Skill name")
-  .description("Remove a skill from the library")
-  .action((name) => {
+  .option("--keep", "Leave harness copies in place")
+  .option("--project", "Also unsync project-scoped copies")
+  .description("Remove a skill from the library and detected harnesses")
+  .action((name, opts) => {
     ensureInit();
-    if (!removeLibrarySkill(name)) {
+    const result = uninstallSkill(name, { keep: Boolean(opts.keep), project: Boolean(opts.project) });
+    if (!result.removed) {
       console.error(`Skill "${name}" is not in the library.`);
       process.exitCode = 1;
       return;
     }
-    console.log(`Removed skill ${name}. Run \`skillcp sync --force --prune\` if harness copies should go too.`);
+    if (opts.keep) {
+      console.log(`Removed skill ${name} from the library. Harness copies were left in place.`);
+      return;
+    }
+    console.log(`Removed skill ${name} from the library and detected harnesses.`);
+    const removed = result.targets.filter((target) => target.action === "remove");
+    if (removed.length) printTargets(removed);
   });
 
 skill
@@ -320,15 +329,21 @@ mcp
 mcp
   .command("rm")
   .argument("<name>", "Server name")
-  .description("Remove an MCP server from the library")
-  .action((name) => {
+  .option("--keep", "Leave harness copies in place")
+  .option("--project", "Also unsync project-scoped copies")
+  .description("Remove an MCP server from the library and detected harnesses")
+  .action((name, opts) => {
     ensureInit();
-    if (!removeMcp(name)) {
+    if (!removeMcp(name, { keep: Boolean(opts.keep), project: Boolean(opts.project) })) {
       console.error(`MCP server "${name}" is not in the library.`);
       process.exitCode = 1;
       return;
     }
-    console.log(`Removed MCP server ${name}.`);
+    if (opts.keep) {
+      console.log(`Removed MCP server ${name} from the library. Harness copies were left in place.`);
+      return;
+    }
+    console.log(`Removed MCP server ${name} from the library and detected harnesses.`);
   });
 
 mcp
@@ -406,7 +421,9 @@ function printTargets(targets: ReturnType<typeof syncAll>): void {
             ? "W"
             : target.action === "copy"
               ? "C"
-              : "L";
+              : target.action === "remove"
+                ? "R"
+                : "L";
     console.log(`${mark} ${target.harness.padEnd(14)} ${target.kind.padEnd(6)} ${target.scope.padEnd(8)} ${target.path}${target.detail ? `  (${target.detail})` : ""}`);
   }
   const summary = [...counts.entries()].map(([action, count]) => `${count} ${action}`).join(", ");

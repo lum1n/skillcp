@@ -5,14 +5,13 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { HARNESSES } from "./harnesses.js";
 import { importFromHarnesses } from "./import.js";
-import { addMcp, addSkillSource, installSelfMcp, installSelfSkill, removeMcp } from "./install.js";
+import { addMcp, addSkillSource, installSelfMcp, installSelfSkill, removeMcp, uninstallSkill } from "./install.js";
 import { initLibrary, isInitialized, libraryRoot } from "./library.js";
 import { parseServerInput } from "./mcp-io.js";
 import { doctor, statusReport } from "./status.js";
 import {
   listLibrarySkills,
   readSkillMarkdown,
-  removeLibrarySkill,
   skillBody,
   writeLibrarySkill,
 } from "./skills.js";
@@ -209,8 +208,8 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
 
     if (method === "DELETE" && skillGet) {
       const name = decodeURIComponent(skillGet[1]);
-      const ok = removeLibrarySkill(name);
-      if (!ok) {
+      const result = uninstallSkill(name);
+      if (!result.removed) {
         sendError(res, 404, `Skill "${name}" is not in the library`);
         return true;
       }

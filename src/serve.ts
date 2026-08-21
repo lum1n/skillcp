@@ -2,11 +2,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { importFromHarnesses } from "./import.js";
-import { addMcp, addSkillSource, installSelfMcp, installSelfSkill, removeMcp } from "./install.js";
+import { addMcp, addSkillSource, installSelfMcp, installSelfSkill, removeMcp, uninstallSkill } from "./install.js";
 import { initLibrary, isInitialized, libraryRoot } from "./library.js";
 import { parseServerInput } from "./mcp-io.js";
 import { doctor, statusReport } from "./status.js";
-import { listLibrarySkills, removeLibrarySkill } from "./skills.js";
+import { listLibrarySkills } from "./skills.js";
 import { loadLibraryMcp, syncAll } from "./sync.js";
 
 function text(value: unknown) {
@@ -68,12 +68,20 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     "skillcp_remove_skill",
-    "Remove a skill from the Skillcp library",
-    { name: z.string() },
-    async ({ name }) => {
+    "Remove a skill from the Skillcp library and unsync it from detected harnesses",
+    {
+      name: z.string(),
+      keep: z.boolean().optional().describe("Leave harness copies in place"),
+      project: z.boolean().optional().describe("Also unsync project-scoped copies"),
+    },
+    async ({ name, keep, project }) => {
       ensure();
-      const ok = removeLibrarySkill(name);
-      return text(ok ? `Removed ${name}` : `Skill ${name} was not in the library`);
+      const result = uninstallSkill(name, { keep, project });
+      return text(
+        result.removed
+          ? { removed: name, keep: Boolean(keep), targets: result.targets }
+          : `Skill ${name} was not in the library`,
+      );
     },
   );
 
@@ -100,11 +108,15 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     "skillcp_remove_mcp",
-    "Remove an MCP server from the library",
-    { name: z.string() },
-    async ({ name }) => {
+    "Remove an MCP server from the library and unsync it from detected harnesses",
+    {
+      name: z.string(),
+      keep: z.boolean().optional().describe("Leave harness copies in place"),
+      project: z.boolean().optional().describe("Also unsync project-scoped copies"),
+    },
+    async ({ name, keep, project }) => {
       ensure();
-      const ok = removeMcp(name);
+      const ok = removeMcp(name, { keep, project });
       return text(ok ? `Removed ${name}` : `MCP server ${name} was not in the library`);
     },
   );

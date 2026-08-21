@@ -1,7 +1,18 @@
 import fs from "node:fs";
 import path from "node:path";
 import { HARNESSES, resolveHarnesses, type Harness } from "./harnesses.js";
-import { copyDir, ensureDir, exists, readJsonc, readLink, rmrf, samePath, writeJson } from "./fsx.js";
+import {
+  copyDir,
+  ensureDir,
+  exists,
+  lexists,
+  listDirs,
+  readJsonc,
+  readLink,
+  rmrf,
+  samePath,
+  writeJson,
+} from "./fsx.js";
 import { loadManifest, mcpFile as libraryMcpFile, saveManifest, skillStrategy, skillsRoot } from "./library.js";
 import { harnessMcpTargets, writeServerMap } from "./mcp-io.js";
 import { extractMap } from "./mcp-format.js";
@@ -20,6 +31,15 @@ export type SyncOptions = {
   mcp?: boolean;
 };
 
+export type UnsyncOptions = {
+  skills?: string[];
+  mcp?: string[];
+  to?: string[];
+  all?: boolean;
+  project?: boolean;
+  dryRun?: boolean;
+};
+
 function scopes(options: SyncOptions): Scope[] {
   const wantGlobal = options.global !== false;
   const wantProject = Boolean(options.project);
@@ -33,9 +53,9 @@ function scopes(options: SyncOptions): Scope[] {
 function linkSkill(src: string, dest: string, force: boolean, dryRun: boolean): SyncTarget["action"] {
   const current = readLink(dest);
   if (current && samePath(current, src)) return "unchanged";
-  if (exists(dest) && !force && !current) return "skip";
+  if (lexists(dest) && !force && !current) return "skip";
   if (dryRun) return "link";
-  if (exists(dest)) rmrf(dest);
+  if (lexists(dest)) rmrf(dest);
   ensureDir(path.dirname(dest));
   const type = process.platform === "win32" ? "junction" : "dir";
   try {
@@ -47,8 +67,21 @@ function linkSkill(src: string, dest: string, force: boolean, dryRun: boolean): 
   }
 }
 
+function isLibrarySkillLink(dest: string, name: string): boolean {
+  const target = readLink(dest);
+  if (!target) return false;
+  return samePath(target, path.join(skillsRoot(), name));
+}
+
+function removeSkillDest(dest: string, dryRun: boolean): SyncTarget["action"] {
+  if (!lexists(dest)) return "unchanged";
+  if (dryRun) return "remove";
+  rmrf(dest);
+  return "remove";
+}
+
 function copySkill(src: string, dest: string, force: boolean, dryRun: boolean): SyncTarget["action"] {
-  if (exists(dest) && !force) {
+  if (lexists(dest) && !force) {
     const current = readLink(dest);
     if (current && samePath(current, src)) {
       if (dryRun) return "copy";
@@ -58,7 +91,7 @@ function copySkill(src: string, dest: string, force: boolean, dryRun: boolean): 
     }
   }
   if (dryRun) return "copy";
-  if (exists(dest)) rmrf(dest);
+  if (lexists(dest)) rmrf(dest);
   copyDir(src, dest);
   return "copy";
 }
@@ -87,6 +120,7 @@ export function syncAll(options: SyncOptions = {}): SyncTarget[] {
       if (doSkills && harness.skills) {
         const dir = harness.skillsDir(scope);
         if (dir) {
+          const libraryNames = new Set(skills.map((skill) => skill.name));
           for (const skill of skills) {
             const dest = path.join(dir, skill.name);
             const src = path.join(skillsRoot(), skill.name);
@@ -104,13 +138,24 @@ export function syncAll(options: SyncOptions = {}): SyncTarget[] {
             }
             targets.push({ harness: harness.id, kind: "skills", scope, path: dest, action, detail });
           }
+          for (const dest of listDirs(dir)) {
+            const name = path.basename(dest);
+            if (libraryNames.has(name) || !isLibrarySkillLink(dest, name)) continue;
+            const action = removeSkillDest(dest, Boolean(options.dryRun));
+            targets.push({
+              harness: harness.id,
+              kind: "skills",
+              scope,
+              path: dest,
+              action,
+              detail: "orphan skillcp link",
+            });
+          }
         }
       }
 
       if (doMcp && harness.mcp) {
-        const prune = options.prune
-          ? managedMcp.filter((name) => !(name in mcp))
-          : undefined;
+        const prune = managedMcp.filter((name) => !(name in mcp));
         for (const target of harnessMcpTargets(harness, scope)) {
           const result = writeServerMap(target.file, target.format, mcp, {
             prune,
@@ -136,6 +181,106 @@ export function syncAll(options: SyncOptions = {}): SyncTarget[] {
     }
     next.mcp = Array.from(new Set([...next.mcp, ...Object.keys(mcp)]));
     saveManifest(next);
+  }
+
+  return targets;
+}
+
+export function unsyncFromHarnesses(options: UnsyncOptions = {}): SyncTarget[] {
+  const skillNames = options.skills ?? [];
+  const mcpNames = options.mcp ?? [];
+  if (!skillNames.length && !mcpNames.length) return [];
+
+  const harnesses = resolveHarnesses(options.to, options.all ? "all" : "detected");
+  const library = loadLibraryMcp();
+  const targets: SyncTarget[] = [];
+  const dryRun = Boolean(options.dryRun);
+
+  for (const harness of harnesses) {
+    for (const scope of scopes({ project: options.project })) {
+      if (skillNames.length && harness.skills) {
+        const dir = harness.skillsDir(scope);
+        if (dir) {
+          for (const name of skillNames) {
+            const dest = path.join(dir, name);
+            const action = removeSkillDest(dest, dryRun);
+            targets.push({
+              harness: harness.id,
+              kind: "skills",
+              scope,
+              path: dest,
+              action,
+              detail: action === "remove" ? "unsynced" : undefined,
+            });
+          }
+        }
+      }
+
+      if (mcpNames.length && harness.mcp) {
+        for (const target of harnessMcpTargets(harness, scope)) {
+          if (!exists(target.file)) {
+            targets.push({
+              harness: harness.id,
+              kind: "mcp",
+              scope,
+              path: target.file,
+              action: "unchanged",
+            });
+            continue;
+          }
+          const result = writeServerMap(target.file, target.format, library, {
+            prune: mcpNames,
+            dryRun,
+          });
+          targets.push({
+            harness: harness.id,
+            kind: "mcp",
+            scope,
+            path: target.file,
+            action: result.changed ? "remove" : "unchanged",
+            detail: mcpNames.join(", "),
+          });
+        }
+      }
+    }
+  }
+
+  return targets;
+}
+
+export function materializeSkillCopies(
+  name: string,
+  options: { to?: string[]; all?: boolean; project?: boolean; dryRun?: boolean } = {},
+): SyncTarget[] {
+  const src = path.join(skillsRoot(), name);
+  if (!exists(src)) return [];
+  const harnesses = resolveHarnesses(options.to, options.all ? "all" : "detected");
+  const targets: SyncTarget[] = [];
+  const dryRun = Boolean(options.dryRun);
+
+  for (const harness of harnesses) {
+    if (!harness.skills) continue;
+    for (const scope of scopes({ project: options.project })) {
+      const dir = harness.skillsDir(scope);
+      if (!dir) continue;
+      const dest = path.join(dir, name);
+      if (!isLibrarySkillLink(dest, name)) {
+        targets.push({ harness: harness.id, kind: "skills", scope, path: dest, action: "unchanged" });
+        continue;
+      }
+      if (!dryRun) {
+        rmrf(dest);
+        copyDir(src, dest);
+      }
+      targets.push({
+        harness: harness.id,
+        kind: "skills",
+        scope,
+        path: dest,
+        action: "copy",
+        detail: "kept as a local copy",
+      });
+    }
   }
 
   return targets;

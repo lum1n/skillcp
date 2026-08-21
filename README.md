@@ -147,7 +147,7 @@ Pi has no native MCP; Skillcp still writes `mcp.json` in Pi's agent dir so [pi-m
   backups/             # copies of harness files before each MCP write
 ```
 
-Sync is additive. Extra MCP servers a harness already had are left alone. `--prune` removes servers Skillcp used to manage that are gone from the library. `--force` replaces skill folders that are not Skillcp symlinks.
+Sync is additive. Extra MCP servers a harness already had are left alone. Servers Skillcp used to manage that left the library are dropped from harness files on the next sync (and immediately on `skill rm` / `mcp rm`). `--force` replaces skill folders that are not Skillcp symlinks. `--keep` on `rm` leaves harness copies in place.
 
 ## Project vs global
 
@@ -171,7 +171,9 @@ skillcp install [--no-sync]
 skillcp serve
 skillcp ui [--port 8787] [--host 127.0.0.1] [--no-open]
 skillcp skill list|add|rm|show
+skillcp skill rm <name> [--keep] [--project]
 skillcp mcp list|add|rm|show
+skillcp mcp rm <name> [--keep] [--project]
 skillcp harnesses
 ```
 
@@ -181,9 +183,10 @@ Skillcp stays a local library plus adapters. It does not:
 
 - Publish itself to npm yet (`npm install -g github:lum1n/skillcp`)
 - Store secrets in a keychain (copy env values as written; prefer `$ENV_NAME`)
-- Uninstall a skill from every harness on `skill rm` unless you `sync --force --prune`
 - Cover every editor (Amp, Roo, Continue, Zed, Goose, Crush, …). New hosts are a small adapter if you need them.
-- Deduplicate skills when a host already scans another host’s folder (Cursor also reads Claude/Codex/`.agents` skills)
+- Deduplicate skills when a host already scans another host’s folder (Cursor also reads Claude/Codex/`.agents` skills). `skillcp doctor` warns when that overlap is live.
+
+`skill rm` and `mcp rm` unsync detected harnesses by default. Pass `--keep` to leave those copies alone (skills that were symlinks are copied first so they keep working).
 
 `skillcp` with no arguments prints a short status and the two commands that matter: `ui` and `sync`.
 

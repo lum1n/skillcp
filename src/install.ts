@@ -4,10 +4,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { exists, rmrf } from "./fsx.js";
-import { addSkillFromDir, findSkills, parseSkill } from "./skills.js";
-import { loadLibraryMcp, saveLibraryMcp } from "./sync.js";
+import { addSkillFromDir, findSkills, librarySkillDir, parseSkill, removeLibrarySkill } from "./skills.js";
+import { loadLibraryMcp, materializeSkillCopies, saveLibraryMcp, unsyncFromHarnesses } from "./sync.js";
 import { loadManifest, saveManifest } from "./library.js";
-import type { McpServerConfig } from "./types.js";
+import type { McpServerConfig, SyncTarget } from "./types.js";
 
 export function packagedSkillDir(): string {
   return path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "skills", "skillcp");
@@ -55,14 +55,36 @@ export function addMcp(name: string, server: McpServerConfig): void {
   saveManifest(manifest);
 }
 
-export function removeMcp(name: string): boolean {
+export type RemoveOptions = {
+  keep?: boolean;
+  project?: boolean;
+};
+
+export function uninstallSkill(
+  name: string,
+  options: RemoveOptions = {},
+): { removed: boolean; targets: SyncTarget[] } {
+  if (!exists(librarySkillDir(name))) return { removed: false, targets: [] };
+  const targets = options.keep
+    ? materializeSkillCopies(name, { project: options.project })
+    : unsyncFromHarnesses({ skills: [name], project: options.project });
+  return { removed: removeLibrarySkill(name), targets };
+}
+
+export function removeMcp(name: string, options: RemoveOptions = {}): boolean {
   const mcp = loadLibraryMcp();
   if (!(name in mcp)) return false;
   delete mcp[name];
   saveLibraryMcp(mcp);
   const manifest = loadManifest();
-  manifest.mcp = manifest.mcp.filter((item) => item !== name);
+  if (options.keep) {
+    manifest.mcp = manifest.mcp.filter((item) => item !== name);
+    saveManifest(manifest);
+    return true;
+  }
+  if (!manifest.mcp.includes(name)) manifest.mcp.push(name);
   saveManifest(manifest);
+  unsyncFromHarnesses({ mcp: [name], project: options.project });
   return true;
 }
 

@@ -14,6 +14,15 @@ export function exists(p: string): boolean {
   }
 }
 
+export function lexists(p: string): boolean {
+  try {
+    fs.lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function ensureDir(dir: string): void {
   fs.mkdirSync(dir, { recursive: true });
 }
@@ -72,7 +81,8 @@ export function readLink(p: string): string | undefined {
   try {
     const stat = fs.lstatSync(p);
     if (!stat.isSymbolicLink()) return undefined;
-    return fs.realpathSync(p);
+    const target = fs.readlinkSync(p);
+    return path.resolve(path.dirname(p), target);
   } catch {
     return undefined;
   }
