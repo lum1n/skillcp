@@ -15,6 +15,7 @@ export * from "./sync.js";
 export * from "./import.js";
 export * from "./install.js";
 export * from "./status.js";
+export * from "./web.js";
 
 export function snapshot() {
   return {

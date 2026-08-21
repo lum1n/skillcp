@@ -2,7 +2,7 @@
 
 Yes. Skills and MCP servers are already portable — every major harness just hides them in a different folder and JSON shape. Skillcp is the missing library: **one copy of each skill and MCP server, published to every harness you use.**
 
-It is a CLI, an MCP server, and an Agent Skill, so Cursor, Claude Code, Copilot, Codex, Gemini CLI, Windsurf, OpenCode, Cline, and Claude Desktop can all drive it.
+It is a CLI, an MCP server, an Agent Skill, and a local web UI, so Cursor, Claude Code, Copilot, Codex, Gemini CLI, Windsurf, OpenCode, Cline, and Claude Desktop can all drive it — or you can manage the library in a browser.
 
 ## What it does
 
@@ -43,6 +43,9 @@ That creates the library, vacuums up existing skills/MCP configs, registers Skil
 ## Everyday use
 
 ```bash
+# Browser GUI for the library
+skillcp ui
+
 # See what is installed where
 skillcp status
 skillcp doctor
@@ -74,7 +77,19 @@ skillcp sync --to cursor --to claude
 
 Any MCP-capable harness can then call tools like `skillcp_add_skill`, `skillcp_add_mcp`, `skillcp_import`, and `skillcp_sync` instead of editing five config files by hand.
 
-If the MCP server is not connected, agents can still run the CLI. The bundled skill at `skills/skillcp/SKILL.md` documents both paths.
+If the MCP server is not connected, agents can still run the CLI. For a browser GUI, run `skillcp ui`. The bundled skill at `skills/skillcp/SKILL.md` documents both paths.
+
+## Web UI
+
+```bash
+skillcp ui
+```
+
+Starts a small local web server (default `http://127.0.0.1:8787`) and opens it in your browser. From there you can create, edit, and remove skills, add MCP servers, import from installed harnesses, and sync the library back out. It binds to localhost only.
+
+```bash
+skillcp ui --port 9000 --no-open
+```
 
 ## Supported harnesses
 
@@ -130,6 +145,7 @@ skillcp import [--to cursor] [--all] [--project] [--overwrite]
 skillcp sync [--to claude] [--all] [--project] [--dry-run] [--force] [--prune]
 skillcp install [--no-sync]
 skillcp serve
+skillcp ui [--port 8787] [--host 127.0.0.1] [--no-open]
 skillcp skill list|add|rm|show
 skillcp mcp list|add|rm|show
 skillcp harnesses
