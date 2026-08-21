@@ -10,8 +10,12 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
+    "bin",
     "skills",
     "web",
+    "extensions",
+    ".claude-plugin",
+    ".mcp.json",
     "README.md",
     "LICENSE"
   ],

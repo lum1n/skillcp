@@ -371,3 +371,26 @@ export async function startWebUi(options: WebUiOptions = {}): Promise<WebUi> {
       }),
   };
 }
+
+let running: Promise<WebUi> | undefined;
+
+export async function ensureWebUi(options: WebUiOptions = {}): Promise<WebUi> {
+  if (!running) {
+    running = startWebUi({
+      host: options.host ?? "127.0.0.1",
+      port: options.port ?? 8787,
+      open: options.open ?? true,
+    })
+      .then((ui) => {
+        ui.server.on("close", () => {
+          running = undefined;
+        });
+        return ui;
+      })
+      .catch((error) => {
+        running = undefined;
+        throw error;
+      });
+  }
+  return running;
+}
