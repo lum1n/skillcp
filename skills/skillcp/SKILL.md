@@ -1,6 +1,6 @@
 ---
 name: skillcp
-description: Organize Agent Skills and MCP servers in one library and sync them to Cursor, Claude Code, GitHub Copilot, Windsurf, Codex, Gemini CLI, OpenCode, Cline, and Claude Desktop. Use when the user wants the same skills or MCP servers available in every AI coding harness, to import existing configs, or to add/remove a skill or MCP server globally.
+description: Organize Agent Skills and MCP servers in one library and sync them to Cursor, Claude Code, GitHub Copilot, Windsurf, Codex, Gemini CLI, OpenCode, Cline, Claude Desktop, and Pi. Use when the user wants the same skills or MCP servers available in every AI coding harness, to import existing configs, or to add/remove a skill or MCP server globally.
 ---
 
 # Skillcp

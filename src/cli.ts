@@ -17,7 +17,33 @@ const program = new Command();
 program
   .name("skillcp")
   .description("Organize Agent Skills and MCP servers once, then sync them to every major AI coding harness.")
-  .version("0.1.0");
+  .version("0.1.0")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  skillcp init --import --install --sync
+  skillcp ui
+  skillcp sync --to pi
+`,
+  )
+  .action(() => {
+    if (!isInitialized()) {
+      console.log("Skillcp keeps one library of skills and MCP servers for every harness.");
+      console.log("");
+      console.log("  skillcp init --import --install --sync");
+      console.log("  skillcp ui");
+      return;
+    }
+    const report = statusReport();
+    console.log(`Library: ${report.library}  (${report.skills} skills, ${report.mcp} MCP)`);
+    const detected = report.harnesses.filter((row) => row.detected).map((row) => row.id);
+    console.log(`Harnesses: ${detected.length ? detected.join(", ") : "none detected"}`);
+    console.log("");
+    console.log("  skillcp ui      open the GUI");
+    console.log("  skillcp sync    publish the library");
+    console.log("  skillcp --help  all commands");
+  });
 
 program
   .command("init")

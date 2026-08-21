@@ -2,7 +2,7 @@
 
 Yes. Skills and MCP servers are already portable — every major harness just hides them in a different folder and JSON shape. Skillcp is the missing library: **one copy of each skill and MCP server, published to every harness you use.**
 
-It is a CLI, an MCP server, an Agent Skill, and a local web UI, so Cursor, Claude Code, Copilot, Codex, Gemini CLI, Windsurf, OpenCode, Cline, and Claude Desktop can all drive it — or you can manage the library in a browser.
+It is a CLI, an MCP server, an Agent Skill, and a local web UI, so Cursor, Claude Code, Copilot, Codex, Gemini CLI, Windsurf, OpenCode, Cline, Claude Desktop, and Pi can all drive it — or you can manage the library in a browser.
 
 ## What it does
 
@@ -126,8 +126,11 @@ skillcp ui --port 9000 --no-open
 | **Cline** | — | `~/.cline/mcp.json` |
 | **Claude Desktop** | — | `claude_desktop_config.json` |
 | **Generic `.agents`** | `~/.agents/skills` / `.agents/skills` | — |
+| **Pi** | `~/.pi/agent/skills` / `.pi/skills` | `~/.pi/agent/mcp.json` / `.pi/mcp.json` |
 
 MCP conversion covers the real format drift: `mcpServers` vs `servers` vs OpenCode `mcp` vs Codex TOML `mcp_servers`, plus Gemini's `httpUrl` vs `url`.
+
+Pi has no native MCP; Skillcp still writes `mcp.json` in Pi's agent dir so [pi-mcp-adapter](https://github.com/nicobailon/pi-mcp-adapter) (and similar extensions) pick the same servers up. Pi also already reads `~/.agents/skills`, so if you sync both `pi` and `agents` you may see the same skill twice.
 
 `skillcp harnesses` prints the resolved paths on your machine.
 
@@ -171,6 +174,18 @@ skillcp skill list|add|rm|show
 skillcp mcp list|add|rm|show
 skillcp harnesses
 ```
+
+## What we deliberately do not do
+
+Skillcp stays a local library plus adapters. It does not:
+
+- Publish itself to npm yet (`npm install -g github:lum1n/skillcp`)
+- Store secrets in a keychain (copy env values as written; prefer `$ENV_NAME`)
+- Uninstall a skill from every harness on `skill rm` unless you `sync --force --prune`
+- Cover every editor (Amp, Roo, Continue, Zed, Goose, Crush, …). New hosts are a small adapter if you need them.
+- Deduplicate skills when a host already scans another host’s folder (Cursor also reads Claude/Codex/`.agents` skills)
+
+`skillcp` with no arguments prints a short status and the two commands that matter: `ui` and `sync`.
 
 ## Development
 

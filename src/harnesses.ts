@@ -62,6 +62,10 @@ function agentsDir(): string {
   return path.join(homeDir(), ".agents");
 }
 
+function piAgentDir(): string {
+  return process.env.PI_CODING_AGENT_DIR || path.join(homeDir(), ".pi", "agent");
+}
+
 function vscodeUserMcp(): string {
   return appData("Code", "User", "mcp.json");
 }
@@ -203,6 +207,22 @@ export const HARNESSES: Harness[] = [
       scope === "global" ? path.join(agentsDir(), "skills") : path.join(projectDir(), ".agents", "skills"),
     mcpFile: () => undefined,
     mcpFormat: () => undefined,
+  },
+  {
+    id: "pi",
+    name: "Pi",
+    skills: true,
+    mcp: true,
+    detect: () => isDir(piAgentDir()) || isDir(path.join(homeDir(), ".pi")) || which("pi"),
+    skillsDir: (scope) =>
+      scope === "global"
+        ? path.join(piAgentDir(), "skills")
+        : path.join(projectDir(), ".pi", "skills"),
+    mcpFile: (scope) =>
+      scope === "global"
+        ? path.join(piAgentDir(), "mcp.json")
+        : path.join(projectDir(), ".pi", "mcp.json"),
+    mcpFormat: () => "mcpServers",
   },
 ];
 

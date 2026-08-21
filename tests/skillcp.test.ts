@@ -36,6 +36,7 @@ beforeEach(() => {
   process.env.SKILLCP_DIR = path.join(home, ".skillcp");
   process.env.SKILLCP_PROJECT = project;
   process.env.XDG_CONFIG_HOME = path.join(home, ".config");
+  delete process.env.PI_CODING_AGENT_DIR;
   initLibrary();
 });
 
@@ -180,8 +181,9 @@ describe("library sync", () => {
     fs.mkdirSync(path.join(home, ".codex"), { recursive: true });
     fs.mkdirSync(path.join(home, ".gemini"), { recursive: true });
     fs.mkdirSync(path.join(home, ".copilot"), { recursive: true });
+    fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
 
-    syncAll({ to: ["opencode", "codex", "gemini", "copilot"] });
+    syncAll({ to: ["opencode", "codex", "gemini", "copilot", "pi"] });
 
     const opencode = readJsonc(path.join(home, ".config", "opencode", "opencode.json"));
     expect(opencode?.mcp).toMatchObject({
@@ -203,6 +205,12 @@ describe("library sync", () => {
 
     const vscode = readJsonc(path.join(home, ".copilot", "mcp-config.json"));
     expect(vscode?.mcpServers?.github?.command).toBe("npx");
+
+    const piMcp = readJsonc(path.join(home, ".pi", "agent", "mcp.json"));
+    expect(piMcp?.mcpServers).toMatchObject({
+      github: { command: "npx" },
+      docs: { url: "https://example.com/mcp" },
+    });
   });
 
   it("preserves unrelated keys when merging MCP configs", () => {
@@ -253,6 +261,17 @@ describe("cli", () => {
     expect(result.stdout).toContain("Library:");
     expect(result.stdout).toContain("cursor");
   });
+
+  it("prints a short getting-started screen with no arguments", () => {
+    const result = spawnSync("npx", ["tsx", "src/cli.ts"], {
+      cwd: path.join(import.meta.dirname, ".."),
+      encoding: "utf8",
+      env: { ...process.env },
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("skillcp ui");
+    expect(result.stdout).toContain("skillcp sync");
+  });
 });
 
 describe("mcp file io", () => {
@@ -280,8 +299,11 @@ describe("harness registry", () => {
   it("exposes the major coding harnesses", () => {
     const ids = HARNESSES.map((h) => h.id);
     expect(ids).toEqual(
-      expect.arrayContaining(["cursor", "claude", "copilot", "windsurf", "codex", "gemini", "opencode"]),
+      expect.arrayContaining(["cursor", "claude", "copilot", "windsurf", "codex", "gemini", "opencode", "pi"]),
     );
     expect(harnessById("Claude Code")?.id).toBe("claude");
+    expect(harnessById("pi")?.skillsDir("global")).toMatch(/\.pi[/\\]agent[/\\]skills$/);
+    expect(harnessById("pi")?.mcpFile("global")).toMatch(/\.pi[/\\]agent[/\\]mcp\.json$/);
+    expect(harnessById("pi")?.mcpFile("project")).toMatch(/\.pi[/\\]mcp\.json$/);
   });
 });
