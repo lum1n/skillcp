@@ -12,7 +12,7 @@ import {
   normalizeMap,
 } from "../src/mcp-format.js";
 import { parseSkill, validateSkillName, findSkills, removeLibrarySkill, writeLibrarySkill } from "../src/skills.js";
-import { initLibrary, libraryRoot } from "../src/library.js";
+import { initLibrary, libraryRoot, saveConfig } from "../src/library.js";
 import { addMcp, addSkillSource, installSelfMcp, installSelfSkill, removeMcp, uninstallSkill } from "../src/install.js";
 import { importFromHarnesses } from "../src/import.js";
 import { loadLibraryMcp, syncAll } from "../src/sync.js";
@@ -523,5 +523,46 @@ describe("skill folder overlap", () => {
     const lines = doctor(["cursor", "claude"]);
     expect(lines.some((line) => line.includes("exists but is not a skillcp link"))).toBe(false);
     expect(lines.filter((line) => line.includes("existing folders"))).toHaveLength(1);
+  });
+
+  it("treats Cursor seeing Claude and Codex copies as expected, not a sync failure", () => {
+    const dir = path.join(project, "shared-both");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "SKILL.md"),
+      `---\nname: shared-both\ndescription: Shared.\n---\n`,
+    );
+    addSkillSource(dir);
+    const src = path.join(libraryRoot(), "skills", "shared-both");
+    for (const dest of [
+      path.join(home, ".claude", "skills", "shared-both"),
+      path.join(home, ".codex", "skills", "shared-both"),
+    ]) {
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.symlinkSync(src, dest);
+    }
+    fs.mkdirSync(path.join(home, ".cursor"), { recursive: true });
+    const report = doctorReport(["cursor", "claude", "codex"]);
+    const overlap = report.find((item) => item.kind === "duplicates" && item.harness === "cursor");
+    expect(overlap?.level).toBe("info");
+    expect(overlap?.title).toMatch(/Claude Code and OpenAI Codex/);
+    expect(overlap?.action).toBeUndefined();
+    expect(doctor(["cursor", "claude", "codex"]).some((line) => line.includes("keep one copy"))).toBe(false);
+  });
+
+  it("stops publishing to a disabled harness and removes its Skillcp links", () => {
+    const dir = path.join(project, "off-skill");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "SKILL.md"), `---\nname: off-skill\ndescription: Off.\n---\n`);
+    addSkillSource(dir);
+    fs.mkdirSync(path.join(home, ".codex"), { recursive: true });
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    syncAll({ to: ["codex", "claude"] });
+    expect(lexists(path.join(home, ".codex", "skills", "off-skill"))).toBe(true);
+
+    saveConfig({ skillStrategy: "symlink", disabledHarnesses: ["codex"] });
+    syncAll();
+    expect(lexists(path.join(home, ".codex", "skills", "off-skill"))).toBe(false);
+    expect(lexists(path.join(home, ".claude", "skills", "off-skill"))).toBe(true);
   });
 });

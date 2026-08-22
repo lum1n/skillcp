@@ -129,7 +129,12 @@ function renderHealth() {
     title.className = "health-item-title";
     title.textContent = item.title;
     li.append(title);
-    if (item.names?.length) {
+    if (item.detail) {
+      const detail = document.createElement("p");
+      detail.className = "health-names";
+      detail.textContent = item.detail;
+      li.append(detail);
+    } else if (item.names?.length) {
       const names = document.createElement("p");
       names.className = "health-names";
       names.textContent = compactNames(item.names);
