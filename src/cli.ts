@@ -11,13 +11,14 @@ import { doctor, statusReport } from "./status.js";
 import { listLibrarySkills, parseSkill, librarySkillDir } from "./skills.js";
 import { loadLibraryMcp, syncAll } from "./sync.js";
 import type { McpServerConfig } from "./types.js";
+import { packageVersion } from "./version.js";
 
 const program = new Command();
 
 program
   .name("skillcp")
   .description("Organize Agent Skills and MCP servers once, then sync them to every major AI coding harness.")
-  .version("0.1.0")
+  .version(packageVersion())
   .addHelpText(
     "after",
     `
