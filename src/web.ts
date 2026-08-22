@@ -8,7 +8,7 @@ import { importFromHarnesses } from "./import.js";
 import { addMcp, addSkillSource, installSelfMcp, installSelfSkill, removeMcp, uninstallSkill } from "./install.js";
 import { initLibrary, isInitialized, libraryRoot } from "./library.js";
 import { parseServerInput } from "./mcp-io.js";
-import { doctor, statusReport } from "./status.js";
+import { doctor, doctorReport, statusReport } from "./status.js";
 import {
   listLibrarySkills,
   readSkillMarkdown,
@@ -63,6 +63,7 @@ function snapshot() {
     mcp: loadLibraryMcp(),
     status: statusReport(),
     doctor: doctor(),
+    health: doctorReport(),
     harnesses: HARNESSES.map((harness) => ({
       id: harness.id,
       name: harness.name,

@@ -11,7 +11,7 @@ import {
   normalizeServer,
   normalizeMap,
 } from "../src/mcp-format.js";
-import { parseSkill, validateSkillName, findSkills, removeLibrarySkill } from "../src/skills.js";
+import { parseSkill, validateSkillName, findSkills, removeLibrarySkill, writeLibrarySkill } from "../src/skills.js";
 import { initLibrary, libraryRoot } from "../src/library.js";
 import { addMcp, addSkillSource, installSelfMcp, installSelfSkill, removeMcp, uninstallSkill } from "../src/install.js";
 import { importFromHarnesses } from "../src/import.js";
@@ -19,7 +19,7 @@ import { loadLibraryMcp, syncAll } from "../src/sync.js";
 import { writeJson, readJsonc, readLink, readToml, lexists, which } from "../src/fsx.js";
 import { HARNESSES, harnessById, pickSkillWriteIds } from "../src/harnesses.js";
 import { writeServerMap, readServerMap } from "../src/mcp-io.js";
-import { doctor, statusReport } from "../src/status.js";
+import { doctor, doctorReport, statusReport } from "../src/status.js";
 import { spawnSync } from "node:child_process";
 
 function tempHome(): string {
@@ -483,5 +483,32 @@ describe("skill folder overlap", () => {
     fs.symlinkSync(src, claudeDest);
     const issues = doctor(["cursor", "claude"]);
     expect(issues.some((issue) => issue.includes("more than once"))).toBe(true);
+  });
+
+  it("groups existing-folder notes instead of listing each skill per host", () => {
+    for (const name of ["agents-sdk", "bubbletea", "wrangler"]) {
+      const lib = path.join(project, name);
+      fs.mkdirSync(lib, { recursive: true });
+      fs.writeFileSync(path.join(lib, "SKILL.md"), `---\nname: ${name}\ndescription: ${name}.\n---\n`);
+      addSkillSource(lib);
+      const dest = path.join(home, ".cursor", "skills", name);
+      fs.mkdirSync(dest, { recursive: true });
+      fs.writeFileSync(path.join(dest, "SKILL.md"), `---\nname: ${name}\ndescription: ${name}.\n---\n`);
+    }
+    writeLibrarySkill("only-in-library", "Library only.", "Body.");
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+
+    const report = doctorReport(["cursor", "claude"]);
+    const unmanaged = report.filter((item) => item.kind === "unmanaged-skills");
+    expect(unmanaged).toHaveLength(1);
+    expect(unmanaged[0]?.names).toEqual(["agents-sdk", "bubbletea", "wrangler"]);
+    expect(unmanaged[0]?.detail).toMatch(/Cursor/);
+
+    const missing = report.filter((item) => item.kind === "missing-skills");
+    expect(missing.some((item) => item.harness === "cursor" && item.title.includes("1 of 4"))).toBe(true);
+
+    const lines = doctor(["cursor", "claude"]);
+    expect(lines.some((line) => line.includes("exists but is not a skillcp link"))).toBe(false);
+    expect(lines.filter((line) => line.includes("existing folders"))).toHaveLength(1);
   });
 });

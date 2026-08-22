@@ -65,6 +65,37 @@ textarea { resize: vertical; line-height: 1.45; }
 label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
 .hint { color: #7f766c; font-weight: 400; }
 
+.health {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin: 0 0 16px;
+}
+.health-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.health-kicker {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+.health-lead { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; max-width: 68ch; }
+.health-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.health-list li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+}
+.health-item-title { margin: 0; font-size: 13px; font-weight: 650; }
+.health-names { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.health-list li.warn { border-color: #5c4a2c; }
+.health-list li.info { border-color: var(--line); }
+
 .activity {
   background: var(--bg-2);
   border: 1px solid var(--line);
