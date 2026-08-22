@@ -8,6 +8,7 @@ import { parseServerInput } from "./mcp-io.js";
 import { doctor, statusReport } from "./status.js";
 import { listLibrarySkills } from "./skills.js";
 import { loadLibraryMcp, syncAll } from "./sync.js";
+import { packageVersion } from "./version.js";
 
 function text(value: unknown) {
   return {
@@ -22,7 +23,7 @@ function ensure(): void {
 export async function startMcpServer(): Promise<void> {
   const server = new McpServer({
     name: "skillcp",
-    version: "0.1.0",
+    version: packageVersion(),
   });
 
   server.tool("skillcp_status", "Show the Skillcp library and harness sync status", {}, async () => {

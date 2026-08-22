@@ -344,6 +344,19 @@ describe("cli", () => {
     expect(result.stdout).toContain("cursor");
   });
 
+  it("prints the package.json version", () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "..", "package.json"), "utf8")) as {
+      version: string;
+    };
+    const result = spawnSync("npx", ["tsx", "src/cli.ts", "--version"], {
+      cwd: path.join(import.meta.dirname, ".."),
+      encoding: "utf8",
+      env: { ...process.env },
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe(pkg.version);
+  });
+
   it("prints a short getting-started screen with no arguments", () => {
     const result = spawnSync("npx", ["tsx", "src/cli.ts"], {
       cwd: path.join(import.meta.dirname, ".."),
