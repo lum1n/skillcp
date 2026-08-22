@@ -1,6 +1,7 @@
 import path from "node:path";
 import { appData, homeDir, projectDir, xdgConfig } from "./paths.js";
 import { exists, isDir, which } from "./fsx.js";
+import { loadConfig } from "./library.js";
 import type { Scope } from "./types.js";
 
 export type McpFormat =
@@ -259,8 +260,13 @@ export function resolveHarnesses(ids: string[] | string | undefined, fallback: "
       return harness;
     });
   }
-  if (fallback === "all") return [...HARNESSES];
-  return detectHarnesses();
+  const list = fallback === "all" ? [...HARNESSES] : detectHarnesses();
+  const disabled = disabledHarnessIds();
+  return disabled.size ? list.filter((harness) => !disabled.has(harness.id)) : list;
+}
+
+export function disabledHarnessIds(): Set<string> {
+  return new Set((loadConfig().disabledHarnesses ?? []).map((id) => id.toLowerCase()));
 }
 
 export function skillViewIds(id: string): string[] {

@@ -98,8 +98,9 @@ export function compactList(names: string[], max = 6): string {
 
 export function formatFinding(item: DoctorFinding): string {
   const names = item.names?.length ? ` (${compactList(item.names)})` : "";
+  const detail = item.detail ? ` ${item.detail}` : "";
   const action = item.action ? ` ${item.action}` : "";
-  return `${item.title}${names}.${action}`.replace(/\.\s*\./g, ".");
+  return `${item.title}${names}.${detail}${action}`.replace(/\.\s*\./g, ".").replace(/\s{2,}/g, " ").trim();
 }
 
 export function doctorReport(to?: string[], scope: Scope = "global"): DoctorFinding[] {
@@ -108,7 +109,7 @@ export function doctorReport(to?: string[], scope: Scope = "global"): DoctorFind
   }
 
   const report = statusReport(scope);
-  const harnesses = to?.length ? resolveHarnesses(to, "all") : detectHarnesses();
+  const harnesses = to?.length ? resolveHarnesses(to, "all") : resolveHarnesses(undefined, "detected");
   const ids = new Set(harnesses.map((item) => item.id));
   const skillNames = listLibrarySkills().map((skill) => skill.name);
   const findings: DoctorFinding[] = [];
@@ -179,6 +180,20 @@ export function doctorReport(to?: string[], scope: Scope = "global"): DoctorFind
     const duped = skillNames.filter((name) => skillLocations(row.id, name, scope).linked.length > 1);
     if (!duped.length) continue;
     const folders = [...new Set(duped.flatMap((name) => skillLocations(row.id, name, scope).linked))];
+    const leftover = folders.includes(row.id);
+    const labels = folders
+      .filter((id) => id !== row.id)
+      .map((id) => harnessById(id)?.name ?? id);
+    if (!leftover && labels.length) {
+      findings.push({
+        kind: "duplicates",
+        level: "info",
+        title: `${row.name} also loads ${joinNames(labels)}`,
+        detail: `Those products each need their own folder, so ${row.name} will list both copies. Sync cannot fold them into one place.`,
+        harness: row.id,
+      });
+      continue;
+    }
     findings.push({
       kind: "duplicates",
       level: "warn",
@@ -194,6 +209,12 @@ export function doctorReport(to?: string[], scope: Scope = "global"): DoctorFind
 
 export function doctor(to?: string[]): string[] {
   return doctorReport(to).map(formatFinding);
+}
+
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
 }
 
 function skillLocations(

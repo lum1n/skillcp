@@ -3,6 +3,8 @@ import path from "node:path";
 import {
   HARNESSES,
   coveredByIds,
+  detectHarnesses,
+  disabledHarnessIds,
   pickSkillWriteIds,
   resolveHarnesses,
   type Harness,
@@ -190,6 +192,45 @@ export function syncAll(options: SyncOptions = {}): SyncTarget[] {
             path: target.file,
             action: result.changed ? "write" : "unchanged",
             detail: `${Object.keys(mcp).length} servers`,
+          });
+        }
+      }
+    }
+  }
+
+  if (doSkills && !options.to?.length) {
+    const disabled = disabledHarnessIds();
+    const active = new Set(harnesses.map((harness) => harness.id));
+    const libraryNames = new Set(skills.map((skill) => skill.name));
+    for (const harness of detectHarnesses()) {
+      if (!disabled.has(harness.id) || active.has(harness.id) || !harness.skills) continue;
+      for (const scope of scopes(options)) {
+        const dir = harness.skillsDir(scope);
+        if (!dir) continue;
+        for (const skill of skills) {
+          const dest = path.join(dir, skill.name);
+          if (!isLibrarySkillLink(dest, skill.name)) continue;
+          const action = removeSkillDest(dest, Boolean(options.dryRun));
+          targets.push({
+            harness: harness.id,
+            kind: "skills",
+            scope,
+            path: dest,
+            action,
+            detail: "disabled harness",
+          });
+        }
+        for (const dest of listDirs(dir)) {
+          const name = path.basename(dest);
+          if (libraryNames.has(name) || !isLibrarySkillLink(dest, name)) continue;
+          const action = removeSkillDest(dest, Boolean(options.dryRun));
+          targets.push({
+            harness: harness.id,
+            kind: "skills",
+            scope,
+            path: dest,
+            action,
+            detail: "orphan skillcp link",
           });
         }
       }
