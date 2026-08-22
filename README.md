@@ -205,23 +205,3 @@ node dist/cli.js status
 ```
 
 Node 20+ is required.
-
-## Releasing
-
-From a clean `main` (after the change you want to ship is merged):
-
-```bash
-npm version patch          # 0.1.2 -> 0.1.3: bumps package.json, commits, tags v0.1.3
-git push && git push --tags
-npm publish --access public
-```
-
-Use `npm version minor` or `npm version major` when the CLI or library contract changes.
-
-`--version` reads `package.json`, so do not edit the version string by hand. If `package.json` is already ahead of the last git tag (as with 0.1.2), skip `npm version` and tag that version:
-
-```bash
-git tag v0.1.2
-git push origin v0.1.2
-npm publish --access public
-```
