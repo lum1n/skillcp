@@ -1,6 +1,6 @@
 const tabs = document.querySelectorAll(".tab");
 const toastEl = document.getElementById("toast");
-const doctorEl = document.getElementById("doctor");
+const healthEl = document.getElementById("health");
 const skillList = document.getElementById("skill-list");
 const mcpList = document.getElementById("mcp-list");
 const skillDetail = document.getElementById("skill-detail");
@@ -96,13 +96,47 @@ function render() {
     `<span><strong>${Object.keys(state.mcp).length}</strong> MCP</span>` +
     `<span><strong>${state.status.harnesses.filter((h) => h.detected).length}</strong> detected</span>`;
 
-  const issues = state.doctor || [];
-  doctorEl.classList.toggle("hidden", issues.length === 0);
-  doctorEl.textContent = issues.join(" · ");
-
+  renderHealth();
   renderSkills();
   renderMcps();
   renderHarnesses();
+}
+
+function compactNames(names, max = 6) {
+  if (!names?.length) return "";
+  if (names.length <= max) return names.join(", ");
+  return `${names.slice(0, max).join(", ")} +${names.length - max} more`;
+}
+
+function renderHealth() {
+  const findings = state.health || [];
+  const lead = document.getElementById("health-lead");
+  const list = document.getElementById("health-list");
+  healthEl.classList.toggle("hidden", findings.length === 0);
+  if (!findings.length) return;
+
+  const unmanaged = findings.find((item) => item.kind === "unmanaged-skills");
+  lead.textContent = unmanaged
+    ? unmanaged.detail || "Import left the original folders in place. Sync replaces them with Skillcp links."
+    : "Drift between the library and detected harnesses.";
+  lead.classList.remove("hidden");
+
+  list.replaceChildren();
+  for (const item of findings) {
+    const li = document.createElement("li");
+    li.className = item.level === "warn" ? "warn" : "info";
+    const title = document.createElement("p");
+    title.className = "health-item-title";
+    title.textContent = item.title;
+    li.append(title);
+    if (item.names?.length) {
+      const names = document.createElement("p");
+      names.className = "health-names";
+      names.textContent = compactNames(item.names);
+      li.append(names);
+    }
+    list.append(li);
+  }
 }
 
 function renderSkills() {
@@ -403,10 +437,16 @@ async function runImport(harnesses) {
     setState(data.state);
     const skills = (data.result?.skills || []).filter((row) => row.action !== "skipped");
     const mcp = (data.result?.mcp || []).filter((row) => row.action !== "skipped");
-    const lines = [
-      ...skills.map((row) => `skill ${row.action}: ${row.name}`),
-      ...mcp.map((row) => `mcp ${row.action}: ${row.name}`),
-    ];
+    const summarize = (label, rows) => {
+      if (!rows.length) return [];
+      const names = rows.map((row) => row.name);
+      if (names.length <= 8) return names.map((name, i) => `${label} ${rows[i].action}: ${name}`);
+      return [`${names.length} ${label}s imported (${compactNames(names, 8)})`];
+    };
+    const lines = [...summarize("skill", skills), ...summarize("mcp", mcp)];
+    if (skills.length || mcp.length) {
+      lines.push("Original harness folders were left in place. Sync to replace them with Skillcp links.");
+    }
     showActivity("Import", lines.length ? lines : ["Nothing new imported (existing entries were skipped)."]);
     toast("Import finished");
   } catch (error) {

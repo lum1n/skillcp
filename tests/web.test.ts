@@ -121,6 +121,8 @@ describe("web UI server", () => {
     const state = await (await fetch(new URL("/api/state", server.url))).json();
     expect(state.library).toBe(libraryRoot());
     expect(state.mcp.docs.url).toBe("https://example.com/mcp");
+    expect(Array.isArray(state.health)).toBe(true);
+    expect(state.health.every((item) => typeof item.title === "string")).toBe(true);
 
     const removed = await fetch(new URL("/api/mcp/docs", server.url), { method: "DELETE" });
     expect(removed.status).toBe(200);

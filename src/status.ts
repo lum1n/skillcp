@@ -44,12 +44,16 @@ export function statusReport(scope: Scope = "global"): StatusReport {
       let mcpMatches: number | undefined;
       if (harness.skills) {
         skillMatches = 0;
+        let unmanaged = 0;
         for (const name of skillNames) {
           const hits = skillLocations(harness.id, name, scope);
           if (hits.linked.length || hits.unmanaged.length) skillMatches += 1;
-          if (!hits.linked.length && hits.unmanaged.length) {
-            notes.push(`skill ${name} exists but is not a skillcp link`);
-          }
+          if (!hits.linked.length && hits.unmanaged.length) unmanaged += 1;
+        }
+        if (unmanaged) {
+          notes.push(
+            `${unmanaged} skill${unmanaged === 1 ? " is" : "s are"} existing folders, not Skillcp links`,
+          );
         }
       }
       if (harness.mcp) {
@@ -77,46 +81,119 @@ export function statusReport(scope: Scope = "global"): StatusReport {
   };
 }
 
-export function doctor(to?: string[]): string[] {
-  const issues: string[] = [];
+export type DoctorFinding = {
+  kind: "unmanaged-skills" | "missing-skills" | "missing-mcp" | "duplicates" | "self-mcp" | "uninit";
+  level: "info" | "warn";
+  title: string;
+  detail?: string;
+  names?: string[];
+  harness?: string;
+  action?: string;
+};
+
+export function compactList(names: string[], max = 6): string {
+  if (names.length <= max) return names.join(", ");
+  return `${names.slice(0, max).join(", ")} +${names.length - max} more`;
+}
+
+export function formatFinding(item: DoctorFinding): string {
+  const names = item.names?.length ? ` (${compactList(item.names)})` : "";
+  const action = item.action ? ` ${item.action}` : "";
+  return `${item.title}${names}.${action}`.replace(/\.\s*\./g, ".");
+}
+
+export function doctorReport(to?: string[], scope: Scope = "global"): DoctorFinding[] {
   if (!isInitialized()) {
-    issues.push("Library is not initialized. Run `skillcp init`.");
-    return issues;
+    return [{ kind: "uninit", level: "warn", title: "Library is not initialized", action: "Run `skillcp init`." }];
   }
-  const report = statusReport();
+
+  const report = statusReport(scope);
   const harnesses = to?.length ? resolveHarnesses(to, "all") : detectHarnesses();
   const ids = new Set(harnesses.map((item) => item.id));
+  const skillNames = listLibrarySkills().map((skill) => skill.name);
+  const findings: DoctorFinding[] = [];
+  const unmanagedHosts: string[] = [];
+  const unmanagedNames = new Set<string>();
+
   for (const row of report.harnesses) {
     if (!ids.has(row.id) || !row.detected) continue;
-    if (row.skills && row.skillTotal && row.skillMatches !== row.skillTotal) {
-      issues.push(
-        `${row.name}: ${row.skillMatches}/${row.skillTotal} skills synced. Run \`skillcp sync --to ${row.id}\`.`,
-      );
+
+    if (row.skills && row.skillTotal) {
+      const unmanaged: string[] = [];
+      let present = 0;
+      for (const name of skillNames) {
+        const hits = skillLocations(row.id, name, scope);
+        if (hits.linked.length || hits.unmanaged.length) present += 1;
+        if (!hits.linked.length && hits.unmanaged.length) unmanaged.push(name);
+      }
+      if (unmanaged.length) {
+        unmanagedHosts.push(row.name);
+        for (const name of unmanaged) unmanagedNames.add(name);
+      }
+      const missing = row.skillTotal - present;
+      if (missing > 0) {
+        findings.push({
+          kind: "missing-skills",
+          level: "warn",
+          title: `${row.name} is missing ${missing} of ${row.skillTotal} library skills`,
+          harness: row.id,
+          action: `Run \`skillcp sync --to ${row.id}\`.`,
+        });
+      }
     }
+
     if (row.mcp && row.mcpTotal && row.mcpMatches !== row.mcpTotal) {
-      issues.push(
-        `${row.name}: ${row.mcpMatches}/${row.mcpTotal} MCP servers synced. Run \`skillcp sync --to ${row.id}\`.`,
-      );
+      findings.push({
+        kind: "missing-mcp",
+        level: "warn",
+        title: `${row.name} has ${row.mcpMatches ?? 0} of ${row.mcpTotal} MCP servers`,
+        harness: row.id,
+        action: `Run \`skillcp sync --to ${row.id}\`.`,
+      });
     }
-    issues.push(...row.notes.map((note) => `${row.name}: ${note}`));
   }
+
+  if (unmanagedNames.size) {
+    findings.unshift({
+      kind: "unmanaged-skills",
+      level: "info",
+      title: `${unmanagedNames.size} skill${unmanagedNames.size === 1 ? " is an existing folder" : "s are existing folders"}, not Skillcp links`,
+      detail: `Seen by ${unmanagedHosts.join(", ")}. Import copies into the library and leaves the originals. Sync replaces those folders with links.`,
+      names: [...unmanagedNames].sort(),
+      action: "Sync to replace those copies with Skillcp links.",
+    });
+  }
+
   const manifest = loadManifest();
   if (!manifest.mcp.includes("skillcp")) {
-    issues.push("Skillcp is not installed as an MCP server. Run `skillcp install` so harnesses can manage the library.");
+    findings.push({
+      kind: "self-mcp",
+      level: "info",
+      title: "Skillcp is not installed as an MCP server",
+      action: "Run `skillcp install` so harnesses can manage the library.",
+    });
   }
 
-  const skillNames = listLibrarySkills().map((skill) => skill.name);
   for (const row of report.harnesses) {
     if (!ids.has(row.id) || !row.detected || !row.skills) continue;
-    const duped = skillNames.filter((name) => skillLocations(row.id, name, "global").linked.length > 1);
+    const duped = skillNames.filter((name) => skillLocations(row.id, name, scope).linked.length > 1);
     if (!duped.length) continue;
-    const folders = [...new Set(duped.flatMap((name) => skillLocations(row.id, name, "global").linked))];
-    issues.push(
-      `${row.name} would see ${duped.length} skill${duped.length === 1 ? "" : "s"} more than once (${folders.join(", ")}). Run \`skillcp sync\` to keep one copy.`,
-    );
+    const folders = [...new Set(duped.flatMap((name) => skillLocations(row.id, name, scope).linked))];
+    findings.push({
+      kind: "duplicates",
+      level: "warn",
+      title: `${row.name} would see ${duped.length} skill${duped.length === 1 ? "" : "s"} more than once`,
+      names: folders,
+      harness: row.id,
+      action: "Run `skillcp sync` to keep one copy.",
+    });
   }
 
-  return issues;
+  return findings;
+}
+
+export function doctor(to?: string[]): string[] {
+  return doctorReport(to).map(formatFinding);
 }
 
 function skillLocations(
