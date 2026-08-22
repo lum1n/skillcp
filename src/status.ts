@@ -1,4 +1,4 @@
-import { HARNESSES, detectHarnesses, resolveHarnesses } from "./harnesses.js";
+import { HARNESSES, detectHarnesses, harnessById, resolveHarnesses, skillViewIds } from "./harnesses.js";
 import { isInitialized, libraryRoot, loadManifest } from "./library.js";
 import { exists, readLink, samePath } from "./fsx.js";
 import { harnessMcpTargets, readServerMap } from "./mcp-io.js";
@@ -43,18 +43,12 @@ export function statusReport(scope: Scope = "global"): StatusReport {
       let skillMatches: number | undefined;
       let mcpMatches: number | undefined;
       if (harness.skills) {
-        const dir = harness.skillsDir(scope);
         skillMatches = 0;
-        if (dir) {
-          for (const name of skillNames) {
-            const dest = path.join(dir, name);
-            const linked = readLink(dest);
-            if (linked && samePath(linked, path.join(skillsRoot(), name))) {
-              skillMatches += 1;
-            } else if (exists(dest)) {
-              skillMatches += 1;
-              notes.push(`skill ${name} exists but is not a skillcp link`);
-            }
+        for (const name of skillNames) {
+          const hits = skillLocations(harness.id, name, scope);
+          if (hits.linked.length || hits.unmanaged.length) skillMatches += 1;
+          if (!hits.linked.length && hits.unmanaged.length) {
+            notes.push(`skill ${name} exists but is not a skillcp link`);
           }
         }
       }
@@ -111,22 +105,38 @@ export function doctor(to?: string[]): string[] {
     issues.push("Skillcp is not installed as an MCP server. Run `skillcp install` so harnesses can manage the library.");
   }
 
-  const detectedIds = new Set(
-    report.harnesses.filter((row) => row.detected && ids.has(row.id)).map((row) => row.id),
-  );
-  const overlaps: Array<[string, string[], string]> = [
-    ["cursor", ["claude", "codex", "agents"], "Cursor also loads Claude Code, Codex, and .agents skill folders"],
-    ["copilot", ["claude", "agents"], "GitHub Copilot / VS Code also loads Claude Code and .agents skill folders"],
-    ["gemini", ["agents"], "Gemini CLI also loads .agents skill folders"],
-    ["pi", ["agents"], "Pi also loads .agents skill folders"],
-  ];
-  for (const [id, others, message] of overlaps) {
-    if (!detectedIds.has(id)) continue;
-    const hit = others.filter((other) => detectedIds.has(other));
-    if (hit.length) {
-      issues.push(`${message}, so the same Skillcp skill may appear more than once.`);
-    }
+  const skillNames = listLibrarySkills().map((skill) => skill.name);
+  for (const row of report.harnesses) {
+    if (!ids.has(row.id) || !row.detected || !row.skills) continue;
+    const duped = skillNames.filter((name) => skillLocations(row.id, name, "global").linked.length > 1);
+    if (!duped.length) continue;
+    const folders = [...new Set(duped.flatMap((name) => skillLocations(row.id, name, "global").linked))];
+    issues.push(
+      `${row.name} would see ${duped.length} skill${duped.length === 1 ? "" : "s"} more than once (${folders.join(", ")}). Run \`skillcp sync\` to keep one copy.`,
+    );
   }
 
   return issues;
+}
+
+function skillLocations(
+  harnessId: string,
+  name: string,
+  scope: Scope,
+): { linked: string[]; unmanaged: string[] } {
+  const linked: string[] = [];
+  const unmanaged: string[] = [];
+  for (const id of skillViewIds(harnessId)) {
+    const other = harnessById(id);
+    const dir = other?.skillsDir(scope);
+    if (!dir) continue;
+    const dest = path.join(dir, name);
+    const target = readLink(dest);
+    if (target && samePath(target, path.join(skillsRoot(), name))) {
+      linked.push(id);
+    } else if (exists(dest)) {
+      unmanaged.push(id);
+    }
+  }
+  return { linked, unmanaged };
 }

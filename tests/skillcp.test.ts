@@ -17,9 +17,9 @@ import { addMcp, addSkillSource, installSelfMcp, installSelfSkill, removeMcp, un
 import { importFromHarnesses } from "../src/import.js";
 import { loadLibraryMcp, syncAll } from "../src/sync.js";
 import { writeJson, readJsonc, readLink, readToml, lexists, which } from "../src/fsx.js";
-import { HARNESSES, harnessById } from "../src/harnesses.js";
+import { HARNESSES, harnessById, pickSkillWriteIds } from "../src/harnesses.js";
 import { writeServerMap, readServerMap } from "../src/mcp-io.js";
-import { doctor } from "../src/status.js";
+import { doctor, statusReport } from "../src/status.js";
 import { spawnSync } from "node:child_process";
 
 function tempHome(): string {
@@ -412,11 +412,76 @@ describe("harness registry", () => {
   });
 });
 
-describe("doctor", () => {
-  it("warns when Cursor and Claude Code would both load the same skills", () => {
+describe("skill folder overlap", () => {
+  it("picks the fewest write targets that still reach every product", () => {
+    expect(pickSkillWriteIds(["cursor", "claude"])).toEqual(["claude"]);
+    expect(pickSkillWriteIds(["cursor", "pi", "agents"])).toEqual(["agents"]);
+    expect(pickSkillWriteIds(["cursor", "claude", "pi"])).toEqual(["claude", "pi"]);
+    expect(pickSkillWriteIds(["cursor"])).toEqual(["cursor"]);
+    expect(pickSkillWriteIds(["agents"])).toEqual(["agents"]);
+  });
+
+  it("writes Cursor+Claude skills once and treats Cursor as covered", () => {
+    const dir = path.join(project, "shared-skill");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "SKILL.md"),
+      `---\nname: shared-skill\ndescription: Shared.\n---\n`,
+    );
+    addSkillSource(dir);
     fs.mkdirSync(path.join(home, ".cursor"), { recursive: true });
     fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
-    const issues = doctor();
-    expect(issues.some((issue) => issue.includes("may appear more than once"))).toBe(true);
+
+    const targets = syncAll({ to: ["cursor", "claude"] });
+    expect(lexists(path.join(home, ".claude", "skills", "shared-skill"))).toBe(true);
+    expect(lexists(path.join(home, ".cursor", "skills", "shared-skill"))).toBe(false);
+    expect(
+      targets.some(
+        (row) => row.harness === "cursor" && row.kind === "skills" && row.detail?.includes("covered by claude"),
+      ),
+    ).toBe(true);
+
+    const report = statusReport();
+    const cursor = report.harnesses.find((row) => row.id === "cursor");
+    expect(cursor?.skillMatches).toBe(1);
+    expect(doctor(["cursor", "claude"]).some((issue) => issue.includes("more than once"))).toBe(false);
+  });
+
+  it("removes leftover Cursor links that would duplicate Claude", () => {
+    const dir = path.join(project, "dup-skill");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "SKILL.md"),
+      `---\nname: dup-skill\ndescription: Dup.\n---\n`,
+    );
+    addSkillSource(dir);
+    fs.mkdirSync(path.join(home, ".cursor"), { recursive: true });
+    syncAll({ to: ["cursor"] });
+    expect(lexists(path.join(home, ".cursor", "skills", "dup-skill"))).toBe(true);
+
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    syncAll({ to: ["cursor", "claude"] });
+    expect(lexists(path.join(home, ".claude", "skills", "dup-skill"))).toBe(true);
+    expect(lexists(path.join(home, ".cursor", "skills", "dup-skill"))).toBe(false);
+    expect(doctor(["cursor", "claude"]).some((issue) => issue.includes("more than once"))).toBe(false);
+  });
+
+  it("warns only when a host can already see two Skillcp copies", () => {
+    const dir = path.join(project, "warn-skill");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "SKILL.md"),
+      `---\nname: warn-skill\ndescription: Warn.\n---\n`,
+    );
+    addSkillSource(dir);
+    const src = path.join(libraryRoot(), "skills", "warn-skill");
+    const cursorDest = path.join(home, ".cursor", "skills", "warn-skill");
+    const claudeDest = path.join(home, ".claude", "skills", "warn-skill");
+    fs.mkdirSync(path.dirname(cursorDest), { recursive: true });
+    fs.mkdirSync(path.dirname(claudeDest), { recursive: true });
+    fs.symlinkSync(src, cursorDest);
+    fs.symlinkSync(src, claudeDest);
+    const issues = doctor(["cursor", "claude"]);
+    expect(issues.some((issue) => issue.includes("more than once"))).toBe(true);
   });
 });

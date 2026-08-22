@@ -16,6 +16,8 @@ export type Harness = {
   name: string;
   skills: boolean;
   mcp: boolean;
+  /** Other harness ids whose skill folders this host also scans. */
+  alsoLoads?: readonly string[];
   detect: () => boolean;
   skillsDir: (scope: Scope) => string | undefined;
   mcpFile: (scope: Scope) => string | undefined;
@@ -86,6 +88,7 @@ export const HARNESSES: Harness[] = [
     name: "Cursor",
     skills: true,
     mcp: true,
+    alsoLoads: ["claude", "codex", "agents"],
     detect: () => isDir(cursorDir()) || which("cursor") || which("cursor-agent"),
     skillsDir: (scope) =>
       scope === "global" ? path.join(cursorDir(), "skills") : path.join(projectDir(), ".cursor", "skills"),
@@ -110,6 +113,7 @@ export const HARNESSES: Harness[] = [
     name: "GitHub Copilot / VS Code",
     skills: true,
     mcp: true,
+    alsoLoads: ["claude", "agents"],
     detect: () => isDir(copilotDir()) || exists(vscodeUserMcp()),
     skillsDir: (scope) =>
       scope === "global" ? path.join(copilotDir(), "skills") : path.join(projectDir(), ".github", "skills"),
@@ -136,6 +140,7 @@ export const HARNESSES: Harness[] = [
     name: "OpenAI Codex",
     skills: true,
     mcp: true,
+    alsoLoads: ["agents"],
     detect: () => isDir(codexDir()) || which("codex"),
     skillsDir: (scope) =>
       scope === "global" ? path.join(codexDir(), "skills") : path.join(projectDir(), ".codex", "skills"),
@@ -148,6 +153,7 @@ export const HARNESSES: Harness[] = [
     name: "Gemini CLI",
     skills: true,
     mcp: true,
+    alsoLoads: ["agents"],
     detect: () => isDir(geminiDir()) || which("gemini"),
     skillsDir: (scope) =>
       scope === "global" ? path.join(geminiDir(), "skills") : path.join(projectDir(), ".gemini", "skills"),
@@ -209,6 +215,7 @@ export const HARNESSES: Harness[] = [
     name: "Pi",
     skills: true,
     mcp: true,
+    alsoLoads: ["agents"],
     detect: () => isDir(piAgentDir()) || isDir(path.join(homeDir(), ".pi")),
     skillsDir: (scope) =>
       scope === "global"
@@ -254,6 +261,70 @@ export function resolveHarnesses(ids: string[] | string | undefined, fallback: "
   }
   if (fallback === "all") return [...HARNESSES];
   return detectHarnesses();
+}
+
+export function skillViewIds(id: string): string[] {
+  const harness = harnessById(id);
+  return [id, ...(harness?.alsoLoads ?? [])];
+}
+
+export function seesSkillDir(viewerId: string, destId: string): boolean {
+  return skillViewIds(viewerId).includes(destId);
+}
+
+function requiredSkillViewers(destIds: string[]): string[] {
+  const products = destIds.filter((id) => id !== "agents");
+  return products.length ? products : destIds;
+}
+
+/**
+ * Choose the fewest skill folders that still reach every product harness.
+ * Shared dumps like `.agents` are used only when they do not make another
+ * host see the same Skillcp skill twice.
+ */
+export function pickSkillWriteIds(ids: string[]): string[] {
+  const dests = [...new Set(ids)].filter((id) => harnessById(id)?.skills);
+  const required = requiredSkillViewers(dests);
+  if (!dests.length) return [];
+  if (!required.length) return dests;
+
+  let best: string[] | undefined;
+  let bestDups = Infinity;
+  let bestWrites = Infinity;
+  let bestKey = "";
+
+  const n = dests.length;
+  const limit = 1 << n;
+  for (let mask = 1; mask < limit; mask++) {
+    const writes: string[] = [];
+    for (let i = 0; i < n; i++) {
+      if (mask & (1 << i)) writes.push(dests[i]!);
+    }
+    let uncovered = 0;
+    let dups = 0;
+    for (const viewer of required) {
+      let seen = 0;
+      for (const dest of writes) {
+        if (seesSkillDir(viewer, dest)) seen += 1;
+      }
+      if (seen === 0) uncovered += 1;
+      if (seen > 1) dups += seen - 1;
+    }
+    if (uncovered) continue;
+    const key = writes.slice().sort().join(",");
+    if (dups < bestDups || (dups === bestDups && writes.length < bestWrites) || (dups === bestDups && writes.length === bestWrites && key < bestKey)) {
+      best = writes;
+      bestDups = dups;
+      bestWrites = writes.length;
+      bestKey = key;
+    }
+  }
+
+  return best ?? dests;
+}
+
+export function coveredByIds(viewerId: string, writeIds: readonly string[]): string[] {
+  return writeIds.filter((dest) => seesSkillDir(viewerId, dest));
 }
 
 export function vscodeGlobalMcpFile(): string {

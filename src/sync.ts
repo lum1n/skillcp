@@ -1,6 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { HARNESSES, resolveHarnesses, type Harness } from "./harnesses.js";
+import {
+  HARNESSES,
+  coveredByIds,
+  pickSkillWriteIds,
+  resolveHarnesses,
+  type Harness,
+} from "./harnesses.js";
 import {
   copyDir,
   ensureDir,
@@ -114,6 +120,9 @@ export function syncAll(options: SyncOptions = {}): SyncTarget[] {
   const mcp = loadLibraryMcp();
   const manifest = loadManifest();
   const managedMcp = manifest.mcp.length ? manifest.mcp : Object.keys(mcp);
+  const skillWriteIds = new Set(
+    pickSkillWriteIds(harnesses.filter((harness) => harness.skills).map((harness) => harness.id)),
+  );
 
   for (const harness of harnesses) {
     for (const scope of scopes(options)) {
@@ -121,17 +130,30 @@ export function syncAll(options: SyncOptions = {}): SyncTarget[] {
         const dir = harness.skillsDir(scope);
         if (dir) {
           const libraryNames = new Set(skills.map((skill) => skill.name));
+          const via = coveredByIds(harness.id, [...skillWriteIds]);
+          const coveredElsewhere = !skillWriteIds.has(harness.id);
+          const viaLabel = via.filter((id) => id !== harness.id).join(", ") || via.join(", ");
           for (const skill of skills) {
             const dest = path.join(dir, skill.name);
             const src = path.join(skillsRoot(), skill.name);
             let action: SyncTarget["action"] = "skip";
             let detail: string | undefined;
             try {
-              action =
-                strategy === "copy"
-                  ? copySkill(src, dest, Boolean(options.force), Boolean(options.dryRun))
-                  : linkSkill(src, dest, Boolean(options.force), Boolean(options.dryRun));
-              if (action === "skip") detail = "existing files, pass --force to replace";
+              if (coveredElsewhere) {
+                if (isLibrarySkillLink(dest, skill.name)) {
+                  action = removeSkillDest(dest, Boolean(options.dryRun));
+                  detail = viaLabel ? `duplicate, covered by ${viaLabel}` : "duplicate";
+                } else {
+                  action = "skip";
+                  detail = viaLabel ? `covered by ${viaLabel}` : "covered by another harness";
+                }
+              } else {
+                action =
+                  strategy === "copy"
+                    ? copySkill(src, dest, Boolean(options.force), Boolean(options.dryRun))
+                    : linkSkill(src, dest, Boolean(options.force), Boolean(options.dryRun));
+                if (action === "skip") detail = "existing files, pass --force to replace";
+              }
             } catch (error) {
               action = "skip";
               detail = error instanceof Error ? error.message : String(error);
