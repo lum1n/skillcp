@@ -19,9 +19,14 @@ After sync, the same GitHub MCP server and the same `code-review` skill show up 
 ## Install
 
 ```bash
-npm install -g github:lum1n/skillcp
-# or from npm, once published:
-# npm install -g skillcp
+npm install -g skillcp
+skillcp --version
+```
+
+Or run without installing:
+
+```bash
+npx skillcp
 ```
 
 From a checkout:
@@ -183,7 +188,6 @@ skillcp harnesses
 
 Skillcp stays a local library plus adapters. It does not:
 
-- Publish itself to npm yet (`npm install -g github:lum1n/skillcp`)
 - Store secrets in a keychain (copy env values as written; prefer `$ENV_NAME`)
 - Cover every editor (Amp, Roo, Continue, Zed, Goose, Crush, …). New hosts are a small adapter if you need them.
 
