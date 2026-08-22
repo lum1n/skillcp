@@ -130,7 +130,9 @@ skillcp ui --port 9000 --no-open
 
 MCP conversion covers the real format drift: `mcpServers` vs `servers` vs OpenCode `mcp` vs Codex TOML `mcp_servers`, plus Gemini's `httpUrl` vs `url`.
 
-Pi has no native MCP; Skillcp still writes `mcp.json` in Pi's agent dir so [pi-mcp-adapter](https://github.com/nicobailon/pi-mcp-adapter) (and similar extensions) pick the same servers up. Pi also already reads `~/.agents/skills`, so if you sync both `pi` and `agents` you may see the same skill twice.
+Pi has no native MCP; Skillcp still writes `mcp.json` in Pi's agent dir so [pi-mcp-adapter](https://github.com/nicobailon/pi-mcp-adapter) (and similar extensions) pick the same servers up.
+
+Several hosts scan more than their own skill folder (Cursor also reads Claude, Codex, and `.agents`; Copilot and Gemini read `.agents`; Pi reads `.agents`). Sync writes each skill to the fewest folders that still reach every product, and removes leftover Skillcp links that would show up twice. MCP configs are per-product and are not folded this way.
 
 `skillcp harnesses` prints the resolved paths on your machine.
 
@@ -184,7 +186,6 @@ Skillcp stays a local library plus adapters. It does not:
 - Publish itself to npm yet (`npm install -g github:lum1n/skillcp`)
 - Store secrets in a keychain (copy env values as written; prefer `$ENV_NAME`)
 - Cover every editor (Amp, Roo, Continue, Zed, Goose, Crush, …). New hosts are a small adapter if you need them.
-- Deduplicate skills when a host already scans another host’s folder (Cursor also reads Claude/Codex/`.agents` skills). `skillcp doctor` warns when that overlap is live.
 
 `skill rm` and `mcp rm` unsync detected harnesses by default. Pass `--keep` to leave those copies alone (skills that were symlinks are copied first so they keep working).
 

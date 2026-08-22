@@ -39,6 +39,6 @@ npx skillcp ui
 
 - Never duplicate a skill by hand-copying `SKILL.md` into each harness folder. Put it in the library and sync.
 - Preserve secrets. Skillcp copies env values as written; prefer `$ENV_NAME` references over raw tokens when adding servers.
-- After adding or editing library entries, run `sync` so every harness sees the change.
+- After adding or editing library entries, run `sync` so every harness sees the change. Sync keeps one copy per host when products share skill folders (Cursor also reads Claude/Codex/`.agents`).
 - `skill rm` / `mcp rm` also unsync detected harnesses. Use `--keep` only when a harness copy should survive as its own files.
 - If a harness already has a real (non-linked) skill directory, `sync` skips it unless `--force` is set.
