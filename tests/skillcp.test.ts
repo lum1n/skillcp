@@ -11,14 +11,15 @@ import {
   normalizeServer,
   normalizeMap,
 } from "../src/mcp-format.js";
-import { parseSkill, validateSkillName, findSkills } from "../src/skills.js";
+import { parseSkill, validateSkillName, findSkills, removeLibrarySkill } from "../src/skills.js";
 import { initLibrary, libraryRoot } from "../src/library.js";
-import { addMcp, addSkillSource, installSelfMcp, installSelfSkill } from "../src/install.js";
+import { addMcp, addSkillSource, installSelfMcp, installSelfSkill, removeMcp, uninstallSkill } from "../src/install.js";
 import { importFromHarnesses } from "../src/import.js";
 import { loadLibraryMcp, syncAll } from "../src/sync.js";
-import { writeJson, readJsonc, readLink, readToml } from "../src/fsx.js";
+import { writeJson, readJsonc, readLink, readToml, lexists, which } from "../src/fsx.js";
 import { HARNESSES, harnessById } from "../src/harnesses.js";
 import { writeServerMap, readServerMap } from "../src/mcp-io.js";
+import { doctor } from "../src/status.js";
 import { spawnSync } from "node:child_process";
 
 function tempHome(): string {
@@ -248,6 +249,87 @@ describe("library sync", () => {
     const again = importFromHarnesses({ to: ["cursor"] });
     expect(again.skills.find((s) => s.name === "demo-skill")?.action).toBe("skipped");
   });
+
+  it("unsyncs harness skill copies on uninstall, including dangling links", () => {
+    const dir = path.join(project, "gone-skill");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "SKILL.md"),
+      `---\nname: gone-skill\ndescription: Temporary.\n---\n`,
+    );
+    addSkillSource(dir);
+    fs.mkdirSync(path.join(home, ".cursor"), { recursive: true });
+    syncAll({ to: ["cursor"] });
+    const dest = path.join(home, ".cursor", "skills", "gone-skill");
+    expect(lexists(dest)).toBe(true);
+
+    const result = uninstallSkill("gone-skill");
+    expect(result.removed).toBe(true);
+    expect(lexists(dest)).toBe(false);
+    expect(fs.existsSync(path.join(libraryRoot(), "skills", "gone-skill"))).toBe(false);
+  });
+
+  it("cleans orphan skillcp links on the next sync", () => {
+    const dir = path.join(project, "orphan-skill");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "SKILL.md"),
+      `---\nname: orphan-skill\ndescription: Temporary.\n---\n`,
+    );
+    addSkillSource(dir);
+    fs.mkdirSync(path.join(home, ".cursor"), { recursive: true });
+    syncAll({ to: ["cursor"] });
+    const dest = path.join(home, ".cursor", "skills", "orphan-skill");
+    expect(removeLibrarySkill("orphan-skill")).toBe(true);
+    expect(readLink(dest)?.endsWith(path.join(".skillcp", "skills", "orphan-skill"))).toBe(true);
+    expect(lexists(dest)).toBe(true);
+
+    const targets = syncAll({ to: ["cursor"] });
+    expect(targets.some((row) => row.path === dest && row.action === "remove")).toBe(true);
+    expect(lexists(dest)).toBe(false);
+  });
+
+  it("materializes harness skill copies when uninstalling with keep", () => {
+    const dir = path.join(project, "keep-skill");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "SKILL.md"),
+      `---\nname: keep-skill\ndescription: Keep me.\n---\nBody.\n`,
+    );
+    addSkillSource(dir);
+    fs.mkdirSync(path.join(home, ".cursor"), { recursive: true });
+    syncAll({ to: ["cursor"] });
+    const dest = path.join(home, ".cursor", "skills", "keep-skill");
+    expect(readLink(dest)).toBeTruthy();
+
+    expect(uninstallSkill("keep-skill", { keep: true }).removed).toBe(true);
+    expect(readLink(dest)).toBeUndefined();
+    expect(fs.existsSync(path.join(dest, "SKILL.md"))).toBe(true);
+    expect(fs.existsSync(path.join(libraryRoot(), "skills", "keep-skill"))).toBe(false);
+  });
+
+  it("unsyncs managed MCP servers on remove and leaves unrelated servers", () => {
+    writeJson(path.join(home, ".cursor", "mcp.json"), {
+      mcpServers: { keepme: { command: "echo" } },
+    });
+    addMcp("github", { command: "npx" });
+    syncAll({ to: ["cursor"] });
+    expect(removeMcp("github")).toBe(true);
+    expect(loadLibraryMcp().github).toBeUndefined();
+    const doc = readJsonc(path.join(home, ".cursor", "mcp.json"));
+    expect(doc?.mcpServers).toMatchObject({ keepme: { command: "echo" } });
+    expect(doc?.mcpServers).not.toHaveProperty("github");
+  });
+
+  it("leaves harness MCP copies when remove is called with keep", () => {
+    addMcp("docs", { type: "http", url: "https://example.com/mcp" });
+    fs.mkdirSync(path.join(home, ".cursor"), { recursive: true });
+    syncAll({ to: ["cursor"] });
+    expect(removeMcp("docs", { keep: true })).toBe(true);
+    expect(loadLibraryMcp().docs).toBeUndefined();
+    const doc = readJsonc(path.join(home, ".cursor", "mcp.json"));
+    expect(doc?.mcpServers?.docs?.url).toBe("https://example.com/mcp");
+  });
 });
 
 describe("cli", () => {
@@ -305,5 +387,36 @@ describe("harness registry", () => {
     expect(harnessById("pi")?.skillsDir("global")).toMatch(/\.pi[/\\]agent[/\\]skills$/);
     expect(harnessById("pi")?.mcpFile("global")).toMatch(/\.pi[/\\]agent[/\\]mcp\.json$/);
     expect(harnessById("pi")?.mcpFile("project")).toMatch(/\.pi[/\\]mcp\.json$/);
+  });
+
+  it("does not treat generic binaries as Copilot or Pi", () => {
+    const bin = path.join(home, "bin");
+    fs.mkdirSync(bin, { recursive: true });
+    fs.writeFileSync(path.join(bin, "code"), "#!/bin/sh\n", { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, "pi"), "#!/bin/sh\n", { mode: 0o755 });
+    const previousPath = process.env.PATH ?? "";
+    process.env.PATH = `${bin}${path.delimiter}${previousPath}`;
+    try {
+      expect(which("code")).toBe(true);
+      expect(which("pi")).toBe(true);
+      expect(harnessById("copilot")?.detect()).toBe(false);
+      expect(harnessById("pi")?.detect()).toBe(false);
+
+      fs.mkdirSync(path.join(home, ".copilot"), { recursive: true });
+      fs.mkdirSync(path.join(home, ".pi"), { recursive: true });
+      expect(harnessById("copilot")?.detect()).toBe(true);
+      expect(harnessById("pi")?.detect()).toBe(true);
+    } finally {
+      process.env.PATH = previousPath;
+    }
+  });
+});
+
+describe("doctor", () => {
+  it("warns when Cursor and Claude Code would both load the same skills", () => {
+    fs.mkdirSync(path.join(home, ".cursor"), { recursive: true });
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    const issues = doctor();
+    expect(issues.some((issue) => issue.includes("may appear more than once"))).toBe(true);
   });
 });

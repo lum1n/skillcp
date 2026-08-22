@@ -110,5 +110,23 @@ export function doctor(to?: string[]): string[] {
   if (!manifest.mcp.includes("skillcp")) {
     issues.push("Skillcp is not installed as an MCP server. Run `skillcp install` so harnesses can manage the library.");
   }
+
+  const detectedIds = new Set(
+    report.harnesses.filter((row) => row.detected && ids.has(row.id)).map((row) => row.id),
+  );
+  const overlaps: Array<[string, string[], string]> = [
+    ["cursor", ["claude", "codex", "agents"], "Cursor also loads Claude Code, Codex, and .agents skill folders"],
+    ["copilot", ["claude", "agents"], "GitHub Copilot / VS Code also loads Claude Code and .agents skill folders"],
+    ["gemini", ["agents"], "Gemini CLI also loads .agents skill folders"],
+    ["pi", ["agents"], "Pi also loads .agents skill folders"],
+  ];
+  for (const [id, others, message] of overlaps) {
+    if (!detectedIds.has(id)) continue;
+    const hit = others.filter((other) => detectedIds.has(other));
+    if (hit.length) {
+      issues.push(`${message}, so the same Skillcp skill may appear more than once.`);
+    }
+  }
+
   return issues;
 }

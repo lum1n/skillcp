@@ -110,11 +110,7 @@ export const HARNESSES: Harness[] = [
     name: "GitHub Copilot / VS Code",
     skills: true,
     mcp: true,
-    detect: () =>
-      isDir(copilotDir()) ||
-      exists(vscodeUserMcp()) ||
-      which("code") ||
-      which("code-insiders"),
+    detect: () => isDir(copilotDir()) || exists(vscodeUserMcp()),
     skillsDir: (scope) =>
       scope === "global" ? path.join(copilotDir(), "skills") : path.join(projectDir(), ".github", "skills"),
     mcpFile: (scope) =>
@@ -213,7 +209,7 @@ export const HARNESSES: Harness[] = [
     name: "Pi",
     skills: true,
     mcp: true,
-    detect: () => isDir(piAgentDir()) || isDir(path.join(homeDir(), ".pi")) || which("pi"),
+    detect: () => isDir(piAgentDir()) || isDir(path.join(homeDir(), ".pi")),
     skillsDir: (scope) =>
       scope === "global"
         ? path.join(piAgentDir(), "skills")

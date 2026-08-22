@@ -28,7 +28,7 @@ export type SyncTarget = {
   kind: "skills" | "mcp";
   scope: Scope;
   path: string;
-  action: "write" | "skip" | "link" | "copy" | "unchanged";
+  action: "write" | "skip" | "link" | "copy" | "unchanged" | "remove";
   detail?: string;
 };
 
