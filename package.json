@@ -1,6 +1,6 @@
 {
   "name": "skillcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Organize Agent Skills and MCP servers once, then sync them to every major AI coding harness.",
   "type": "module",
   "bin": {
