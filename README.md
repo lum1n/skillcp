@@ -111,7 +111,7 @@ If the MCP server is not connected, agents can still run the CLI. For a browser 
 skillcp ui
 ```
 
-Starts a small local web server (default `http://127.0.0.1:8787`) and opens it in your browser. From there you can create, edit, and remove skills, add MCP servers, import from installed harnesses, and sync the library back out. It binds to localhost only.
+Starts a small local web server (default `http://127.0.0.1:8787`, or the next free port if that one is taken) and opens it in your browser. From there you can create, edit, and remove skills, add MCP servers, import from installed harnesses, and sync the library back out. It binds to localhost only.
 
 ```bash
 skillcp ui --port 9000 --no-open
@@ -176,7 +176,7 @@ skillcp import [--to cursor] [--all] [--project] [--overwrite]
 skillcp sync [--to claude] [--all] [--project] [--dry-run] [--force] [--prune]
 skillcp install [--no-sync]
 skillcp serve
-skillcp ui [--port 8787] [--host 127.0.0.1] [--no-open]
+skillcp ui [--port 8787] [--host 127.0.0.1] [--no-open]   # next free port if busy
 skillcp skill list|add|rm|show
 skillcp skill rm <name> [--keep] [--project]
 skillcp mcp list|add|rm|show

@@ -199,18 +199,22 @@ program
 program
   .command("ui")
   .description("Open a local web UI to manage skills and MCP servers")
-  .option("-p, --port <port>", "Port", "8787")
+  .option("-p, --port <port>", "Port (next free if busy)", "8787")
   .option("--host <host>", "Bind address", "127.0.0.1")
   .option("--no-open", "Do not open a browser")
   .action(async (opts) => {
     ensureInit();
     const { startWebUi } = await import("./web.js");
+    const wanted = Number(opts.port);
     const ui = await startWebUi({
       host: opts.host,
-      port: Number(opts.port),
+      port: wanted,
       open: opts.open !== false,
     });
     console.log(`Skillcp UI on ${ui.url}`);
+    if (ui.port !== wanted) {
+      console.log(`(port ${wanted} was in use; using ${ui.port})`);
+    }
     console.log("Press Ctrl+C to stop.");
   });
 

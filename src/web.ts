@@ -344,20 +344,58 @@ function openBrowser(url: string): void {
   }
 }
 
+const DEFAULT_PORT = 8787;
+const LISTEN_PORT_TRIES = 20;
+
+function listenOn(server: http.Server, host: string, port: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const onError = (error: Error) => {
+      server.off("listening", onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.off("error", onError);
+      const addr = server.address();
+      resolve(typeof addr === "object" && addr ? addr.port : port);
+    };
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port, host);
+  });
+}
+
+/** Bind host:port. If that port is taken, try the next ports on the same host (like nubilo). Port 0 leaves it to the OS. */
+async function listenLoopback(host: string, port: number): Promise<{ server: http.Server; port: number }> {
+  if (port === 0) {
+    const server = createWebServer();
+    const actual = await listenOn(server, host, 0);
+    return { server, port: actual };
+  }
+
+  let last: Error | undefined;
+  for (let i = 0; i < LISTEN_PORT_TRIES; i++) {
+    const candidate = port + i;
+    if (candidate > 65535) break;
+    const server = createWebServer();
+    try {
+      const actual = await listenOn(server, host, candidate);
+      return { server, port: actual };
+    } catch (error) {
+      server.close();
+      const err = error instanceof Error ? error : new Error(String(error));
+      last = err;
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "EADDRINUSE") throw err;
+    }
+  }
+  throw last ?? new Error(`No free port at or above ${host}:${port}`);
+}
+
 export async function startWebUi(options: WebUiOptions = {}): Promise<WebUi> {
   ensure();
   const host = options.host ?? "127.0.0.1";
-  const wantedPort = options.port ?? 8787;
-  const server = createWebServer();
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(wantedPort, host, () => {
-      server.off("error", reject);
-      resolve();
-    });
-  });
-  const addr = server.address();
-  const port = typeof addr === "object" && addr ? addr.port : wantedPort;
+  const wantedPort = options.port ?? DEFAULT_PORT;
+  const { server, port } = await listenLoopback(host, wantedPort);
   const url = `http://${host}:${port}/`;
   if (options.open) openBrowser(url);
   return {
@@ -378,7 +416,7 @@ export async function ensureWebUi(options: WebUiOptions = {}): Promise<WebUi> {
   if (!running) {
     running = startWebUi({
       host: options.host ?? "127.0.0.1",
-      port: options.port ?? 8787,
+      port: options.port ?? DEFAULT_PORT,
       open: options.open ?? true,
     })
       .then((ui) => {

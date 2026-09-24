@@ -1,10 +1,11 @@
-const tabs = document.querySelectorAll(".tab");
+const tabs = document.querySelectorAll(".nav-link[data-tab]");
 const toastEl = document.getElementById("toast");
 const healthEl = document.getElementById("health");
 const skillList = document.getElementById("skill-list");
 const mcpList = document.getElementById("mcp-list");
 const skillDetail = document.getElementById("skill-detail");
 const mcpForm = document.getElementById("form-mcp");
+const pageTitle = document.getElementById("page-title");
 
 let state = null;
 let selectedSkill = null;
@@ -93,7 +94,7 @@ function render() {
   document.getElementById("library-path").textContent = state.library;
   document.getElementById("stats").innerHTML =
     `<span><strong>${state.skills.length}</strong> skills</span>` +
-    `<span><strong>${Object.keys(state.mcp).length}</strong> MCP</span>` +
+    `<span><strong>${Object.keys(state.mcp).length}</strong> mcp</span>` +
     `<span><strong>${state.status.harnesses.filter((h) => h.detected).length}</strong> detected</span>`;
 
   renderHealth();
@@ -167,9 +168,9 @@ function renderSkills() {
     main.append(name, meta);
     const del = document.createElement("button");
     del.type = "button";
-    del.className = "ghost danger";
+    del.className = "btn sm danger";
     del.dataset.removeSkill = skill.name;
-    del.textContent = "Remove";
+    del.textContent = "rm";
     li.append(main, del);
     skillList.append(li);
   }
@@ -200,9 +201,9 @@ function renderMcps() {
     main.append(title, meta);
     const del = document.createElement("button");
     del.type = "button";
-    del.className = "ghost danger";
+    del.className = "btn sm danger";
     del.dataset.removeMcp = name;
-    del.textContent = "Remove";
+    del.textContent = "rm";
     li.append(main, del);
     mcpList.append(li);
   }
@@ -227,13 +228,14 @@ function renderHarnesses() {
     const actions = document.createElement("td");
     const sync = document.createElement("button");
     sync.type = "button";
+    sync.className = "btn sm";
     sync.dataset.syncTo = row.id;
-    sync.textContent = "Sync";
+    sync.textContent = "sync";
     const imp = document.createElement("button");
     imp.type = "button";
-    imp.className = "ghost";
+    imp.className = "btn sm ghost";
     imp.dataset.importTo = row.id;
-    imp.textContent = "Import";
+    imp.textContent = "import";
     actions.append(sync, imp);
     tr.append(name, status, skills, mcp, actions);
     body.append(tr);
@@ -249,10 +251,10 @@ async function showSkill(name) {
   form.className = "form-stack";
   form.innerHTML = `
     <h2></h2>
-    <label>Name<input name="name" readonly /></label>
-    <label>Description<textarea name="description" rows="3" required></textarea></label>
-    <label>Instructions<textarea name="body" rows="14"></textarea></label>
-    <div class="row-actions"><button class="primary" type="submit">Save skill</button></div>
+    <label>name<input name="name" readonly /></label>
+    <label>description<textarea name="description" rows="3" required></textarea></label>
+    <label>instructions<textarea name="body" rows="14"></textarea></label>
+    <div class="row-actions"><button class="btn primary" type="submit">save</button></div>
   `;
   form.querySelector("h2").textContent = skill.name;
   form.elements.namedItem("name").value = skill.name;
@@ -284,7 +286,7 @@ function field(form, name) {
 function fillMcpForm(name) {
   selectedMcp = name;
   const server = name ? state.mcp[name] : null;
-  document.getElementById("mcp-form-title").textContent = name ? `Edit ${name}` : "Add server";
+  document.getElementById("mcp-form-title").textContent = name ? `edit ${name}` : "add server";
   field(mcpForm, "name").value = name || "";
   field(mcpForm, "type").value = server?.type || (server?.url ? "http" : "stdio");
   field(mcpForm, "command").value = server?.command || "";
@@ -296,16 +298,22 @@ function fillMcpForm(name) {
   renderMcps();
 }
 
+function showNewMcp() {
+  fillMcpForm(null);
+  mcpForm.scrollIntoView({ behavior: "smooth", block: "start" });
+  field(mcpForm, "name").focus();
+}
+
 function showNewSkill() {
   selectedSkill = null;
   renderSkills();
   skillDetail.innerHTML = `
     <form class="form-stack" id="form-new-skill">
-      <h2>New skill</h2>
-      <label>Name<input name="name" required placeholder="code-review" /></label>
-      <label>Description<textarea name="description" rows="3" required placeholder="When to use this skill"></textarea></label>
-      <label>Instructions<textarea name="body" rows="12" placeholder="Markdown instructions"></textarea></label>
-      <div class="row-actions"><button class="primary" type="submit">Create skill</button></div>
+      <h2>new skill</h2>
+      <label>name<input name="name" required placeholder="code-review" /></label>
+      <label>description<textarea name="description" rows="3" required placeholder="when to use this skill"></textarea></label>
+      <label>instructions<textarea name="body" rows="12" placeholder="markdown instructions"></textarea></label>
+      <div class="row-actions"><button class="btn primary" type="submit">create</button></div>
     </form>
   `;
   document.getElementById("form-new-skill").addEventListener("submit", async (event) => {
@@ -334,10 +342,12 @@ tabs.forEach((tab) => {
     tabs.forEach((item) => item.classList.toggle("active", item === tab));
     document.querySelectorAll(".panel").forEach((panel) => panel.classList.add("hidden"));
     document.getElementById(`panel-${tab.dataset.tab}`).classList.remove("hidden");
+    pageTitle.textContent = tab.dataset.tab;
   });
 });
 
 document.getElementById("btn-new-skill").addEventListener("click", showNewSkill);
+document.getElementById("btn-new-mcp").addEventListener("click", showNewMcp);
 
 document.getElementById("form-add-skill").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -369,7 +379,7 @@ skillList.addEventListener("click", async (event) => {
       const data = await api(`/api/skills/${encodeURIComponent(name)}`, { method: "DELETE" });
       if (selectedSkill === name) {
         selectedSkill = null;
-        skillDetail.innerHTML = `<p class="empty">Select a skill to view or edit it.</p>`;
+        skillDetail.innerHTML = `<p class="empty">select a skill to view or edit it</p>`;
       }
       setState(data.state);
       toast(`Removed ${name}`);
@@ -399,7 +409,12 @@ mcpList.addEventListener("click", async (event) => {
     return;
   }
   const row = event.target.closest("li[data-mcp]");
-  if (row) fillMcpForm(row.dataset.mcp);
+  if (row) {
+    fillMcpForm(row.dataset.mcp);
+    if (window.matchMedia("(max-width: 840px)").matches) {
+      mcpForm.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
 });
 
 mcpForm.addEventListener("submit", async (event) => {

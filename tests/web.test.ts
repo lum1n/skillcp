@@ -55,7 +55,7 @@ describe("web UI server", () => {
     const server = await start();
     const page = await fetch(server.url);
     expect(page.status).toBe(200);
-    expect(await page.text()).toContain("Skillcp");
+    expect(await page.text()).toContain("skillcp");
     const css = await fetch(new URL("/styles.css", server.url));
     expect(css.status).toBe(200);
     const health = await fetch(new URL("/api/health", server.url));
@@ -148,5 +148,27 @@ describe("web UI server", () => {
     const health = await fetch(new URL("/api/health", first.url));
     expect(health.status).toBe(200);
     await first.close();
+  });
+
+  it("falls back to the next free port when the requested one is busy", async () => {
+    const net = await import("node:net");
+    const busy = net.createServer();
+    await new Promise<void>((resolve, reject) => {
+      busy.once("error", reject);
+      busy.listen(0, "127.0.0.1", () => resolve());
+    });
+    const addr = busy.address();
+    const taken = typeof addr === "object" && addr ? addr.port : 0;
+    expect(taken).toBeGreaterThan(0);
+
+    ui = await startWebUi({ host: "127.0.0.1", port: taken, open: false });
+    expect(ui.port).not.toBe(taken);
+    expect(ui.port).toBeGreaterThan(taken);
+    const health = await fetch(new URL("/api/health", ui.url));
+    expect(await health.json()).toEqual({ ok: true });
+
+    await new Promise<void>((resolve, reject) => {
+      busy.close((error) => (error ? reject(error) : resolve()));
+    });
   });
 });
