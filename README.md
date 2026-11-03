@@ -169,19 +169,21 @@ Skillcp does not rewrite or encrypt env values. Prefer environment-variable refe
 ## CLI
 
 ```
-skillcp init [--import] [--install] [--sync]
+skillcp init [--import] [--install] [--sync] [--project]
 skillcp status [--project]
-skillcp doctor
-skillcp import [--to cursor] [--all] [--project] [--overwrite]
-skillcp sync [--to claude] [--all] [--project] [--dry-run] [--force] [--prune]
-skillcp install [--no-sync]
+skillcp doctor [--to cursor]
+skillcp import [--to cursor] [--all] [--project] [--overwrite] [--skills-only | --mcp-only]
+skillcp sync [--to claude] [--all] [--project] [--dry-run] [--force] [--prune] [--skills-only | --mcp-only]
+skillcp install [--no-sync] [--project]
 skillcp serve
 skillcp ui [--port 8787] [--host 127.0.0.1] [--no-open]   # next free port if busy
 skillcp skill list|add|rm|show
+skillcp skill add <source> [--path <subdir>]
 skillcp skill rm <name> [--keep] [--project]
 skillcp mcp list|add|rm|show
+skillcp mcp add <name> [--command <cmd>] [--args a,b] [--url <url>] [--type stdio|http|sse] [--env K=V...] [--header K=V...] [--cwd <dir>]
 skillcp mcp rm <name> [--keep] [--project]
-skillcp harnesses
+skillcp harnesses [--project]
 ```
 
 ## What we deliberately do not do
