@@ -95,8 +95,8 @@ export async function startMcpServer(): Promise<void> {
       args: z.array(z.string()).optional(),
       url: z.string().optional(),
       type: z.enum(["stdio", "http", "sse"]).optional(),
-      env: z.record(z.string()).optional(),
-      headers: z.record(z.string()).optional(),
+      env: z.record(z.string(), z.string()).optional(),
+      headers: z.record(z.string(), z.string()).optional(),
       cwd: z.string().optional(),
     },
     async (input) => {
